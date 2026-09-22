@@ -1,47 +1,36 @@
 # Learning Japanese
 
-A fully offline desktop rebuild of Kana Pro (https://kana.pro) for learning
-Japanese Hiragana & Katakana. Runs on Electron, needs no internet, no account,
-and stores everything (profile, statistics, settings) locally.
+A fully offline desktop app for learning Japanese Hiragana & Katakana (a rebuild
+of Kana Pro — https://kana.pro). No account, no internet after the first run,
+and all your progress stays on this device.
 
-## Required
+## Run it
+
+1. **Install Node.js** (once) — free from https://nodejs.org. Check it works:
+   ```powershell
+   node -v
+   ```
+2. **Run the programme** — double-click `Learning Japanese.vbs` (recommended,
+   no console window) or `start.bat`. **The first launch installs everything
+   it needs** (the Electron runtime) automatically and then opens the app. No
+   Japanese voice, language pack, or anything else needs installing.
+
+That's it. After the one-time setup the app runs fully offline.
+
+## Requirements
 
 - **Windows, macOS, or Linux**
-- **Node.js** (version 16 or newer, includes `npm`) — download from
-  https://nodejs.org if you don't have it. Check with:
-  ```powershell
-  node -v
-  npm -v
-  ```
-- Internet is only needed once, to download Electron during `npm install`.
-  After that the app runs fully offline.
+- **Node.js** (version 16 or newer) — only used to fetch the runtime on first
+  launch. Everything else is installed automatically when you run the programme.
 
-## Setup & Run
-
-### 1. Install dependencies (first time only)
-
-Open a terminal in this folder and run:
-
-```powershell
-npm install
-```
-
-This downloads Electron into `node_modules/`. It may take a minute or two.
-
-### 2. Start the app
+## Terminal use (optional)
 
 ```powershell
 npm start
 ```
 
-The app window should open. If it doesn't, make sure step 1 succeeded (you
-should see a `node_modules` folder here).
-
-### Alternative: start.bat / Learning Japanese.vbs (Windows)
-
-Double-click `Learning Japanese.vbs` in this folder — it opens the app with a
-splash loading screen and **no command-prompt window**. (Double-clicking
-`start.bat` also works, with a tiny console flash at startup.)
+(If you launch from a terminal for the very first time, run `npm install` once
+in this folder first — the double-click launchers do this automatically.)
 
 ## Japanese pronunciation (bundled, offline)
 
@@ -87,8 +76,8 @@ src/audio/         bundled pronunciation clips (one WAV per kana)
 src/audio-map.js   kana → clip filename map
 src/app.js         quiz engine, chart, statistics, settings
 main.js            Electron main process (splash + main window)
-start.bat          Windows launch helper (runs Electron directly)
-Learning Japanese.vbs  Windows double-click launcher, no console window
+start.bat          Windows launcher — auto-installs Electron on first run
+Learning Japanese.vbs  Windows double-click launcher (no console window), auto-installs Electron on first run
 ```
 
 Offline educational tool for personal kana practice. Not affiliated with Kana Pro.
