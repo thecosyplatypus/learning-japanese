@@ -948,7 +948,22 @@ function fitGlyphFont(canvasWidth, text, ratio) {
   return Math.floor((canvasWidth * 0.92) / n);  // multi-kana: shrink so the whole word fits
 }
 
+let _audio = null;
+
 function speakChar(text) {
+  // 1) prefer the bundled pronunciation clips (fully offline, no OS voice needed)
+  const file = (typeof AudioMap !== 'undefined') ? AudioMap[text] : null;
+  if (file) {
+    try {
+      if (_audio) { _audio.pause(); _audio = null; }
+      _audio = new Audio('audio/' + file);
+      _audio.volume = 1;
+      const p = _audio.play();
+      if (p && p.catch) p.catch(() => {});
+      return;
+    } catch { /* fall through to OS speech */ }
+  }
+  // 2) fallback: OS text-to-speech (only used when a clip isn't bundled)
   try {
     if (!('speechSynthesis' in window)) { toast('Speech not available on this device'); return; }
     speechSynthesis.cancel();
@@ -963,9 +978,7 @@ function speakChar(text) {
       speechSynthesis.speak(u);
       return;
     }
-    const hint = document.querySelector('.detail-popup .muted');
-    if (hint) hint.textContent = 'No Japanese voice on this device — add one in Settings → Time & Language → Speech, or Windows Settings → System → Sound → Speech. Then reopen this popup.';
-    toast('No Japanese voice installed on this Windows PC.');
+    toast('No Japanese voice on this device.');
   } catch { toast('Speech not available'); }
 }
 if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
