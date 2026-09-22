@@ -1,7 +1,7 @@
 # Learning Japanese
 
-A fully offline desktop app for learning Japanese Hiragana & Katakana (a rebuild
-of Kana Pro — https://kana.pro). No account, no internet after the first run,
+A fully offline desktop app for learning Japanese Hiragana & Katakana.
+No account, no internet after the first run,
 and all your progress stays on this device.
 
 ## Run it
@@ -80,4 +80,4 @@ start.bat          Windows launcher — auto-installs Electron on first run
 Learning Japanese.vbs  Windows double-click launcher (no console window), auto-installs Electron on first run
 ```
 
-Offline educational tool for personal kana practice. Not affiliated with Kana Pro.
+Offline educational tool for personal kana practice.
