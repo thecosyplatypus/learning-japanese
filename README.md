@@ -37,10 +37,11 @@ npm start
 The app window should open. If it doesn't, make sure step 1 succeeded (you
 should see a `node_modules` folder here).
 
-### Alternative: start.bat (Windows)
+### Alternative: start.bat / Learning Japanese.vbs (Windows)
 
-Double-click `start.bat` in this folder — it does the same thing as
-`npm start` without needing to open a terminal.
+Double-click `Learning Japanese.vbs` in this folder — it opens the app with a
+splash loading screen and **no command-prompt window**. (Double-clicking
+`start.bat` also works, with a tiny console flash at startup.)
 
 ## Japanese voice for pronunciation
 
@@ -110,13 +111,15 @@ Output lands in the `dist/` folder.
 ## Layout
 
 ```
-src/index.html     app shell
+src/index.html     app shell (boot splash)
+src/splash.html    launcher splash screen
 src/styles.css     styling
 src/kana-data.js   kana data
 src/stroke-paths.js  stroke order data
 src/app.js         quiz engine, chart, statistics, settings
-main.js            Electron main process
-start.bat          Windows double-click launcher
+main.js            Electron main process (splash + main window)
+start.bat          Windows launch helper (runs Electron directly)
+Learning Japanese.vbs  Windows double-click launcher, no console window
 ```
 
 Offline educational tool for personal kana practice. Not affiliated with Kana Pro.

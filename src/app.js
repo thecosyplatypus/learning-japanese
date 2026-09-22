@@ -20,18 +20,39 @@ const DEFAULT_SETTINGS = {
   font: 'noto-sans-jp',
   questionCount: 10,
   direction: 'both',
-  autoNext: false
+  autoNext: false,
+  speakOnQuestion: true
 };
 
-const STAGES = [
-  { id: 1, label: 'Stage 1', name: 'Hiragana · Gojūon', scripts: ['hiragana'], groups: ['gojuon'] },
-  { id: 2, label: 'Stage 2', name: 'Katakana · Gojūon', scripts: ['katakana'], groups: ['gojuon'] },
-  { id: 3, label: 'Stage 3', name: 'Hiragana · Dakuten', scripts: ['hiragana'], groups: ['dakuten'] },
-  { id: 4, label: 'Stage 4', name: 'Katakana · Dakuten', scripts: ['katakana'], groups: ['dakuten'] },
-  { id: 5, label: 'Stage 5', name: 'Hiragana · Yōon', scripts: ['hiragana'], groups: ['yoon'] },
-  { id: 6, label: 'Stage 6', name: 'Katakana · Yōon', scripts: ['katakana'], groups: ['yoon'] },
-  { id: 7, label: 'Stage 7', name: 'Katakana · Extended', scripts: ['katakana'], groups: ['extended'] }
-];
+function orderedScriptChars(script) {
+  const out = [];
+  for (const g of KANA[script].groups) {
+    for (const row of g.rows) {
+      for (const c of row) out.push({ script, char: c.k, romaji: c.r, group: g.name });
+    }
+  }
+  return out;
+}
+
+function buildStages() {
+  const stages = [];
+  let id = 1;
+  // Hiragana first, then Katakana: 1–10, 11–20, 21–30, … on and on
+  for (const script of ['hiragana', 'katakana']) {
+    const base = script === 'hiragana' ? 'Hiragana' : 'Katakana';
+    const chars = orderedScriptChars(script);
+    for (let i = 0; i < chars.length; i += 10) {
+      const start = i + 1;
+      const end = Math.min(chars.length, i + 10);
+      stages.push({ id: id++, label: `${base} ${start}–${end}`, name: `${base} · characters ${start}–${end}`, script, chars: chars.slice(i, i + 10) });
+    }
+  }
+  return stages;
+}
+
+const STAGES = buildStages();   // e.g. Hiragana 1–10, Hiragana 11–20, …, Katakana …
+
+const ROUND_SIZE = 10;        // characters per quiz (in selection order)
 
 const state = {
   settings: loadOrDefault(LS_KEYS.settings, DEFAULT_SETTINGS),
@@ -40,9 +61,11 @@ const state = {
   quiz: loadOrDefault(LS_KEYS.quiz, {
     mode: 'auto',
     scripts: { hiragana: true, katakana: true },
-    groups: [],            // manual selection, group keys
+    groups: [],            // manual selection, group keys (legacy whole-script)
+    rows: [],              // manual selection, fine-grained rows "script|group|rowIdx"
     customGroups: [],      // indices into state.custom
     stages: [1, 2],        // enabled stages for auto mode
+    chunkStart: 0,         // where the next ordered 10-quiz starts in the pool
     customMode: false
   }),
   route: 'home',
@@ -152,7 +175,7 @@ function renderHome() {
   /* --- select characters --- */
   const card = el('div', 'card');
   const title = el('h2', '', 'Select characters');
-  const desc = el('p', 'muted tiny', 'Automatic chooses characters to study based on your progress. Manual lets you choose specific groups.');
+  const desc = el('p', 'muted tiny', 'Automatic chooses characters to study based on your progress. Manual lets you pick specific rows of characters — for example just か き く け こ.');
   const tabs = el('div', 'tabs');
   const tAuto = el('button', 'tab' + (state.quiz.mode === 'auto' ? ' active' : ''), 'Automatic');
   const tManual = el('button', 'tab' + (state.quiz.mode === 'manual' ? ' active' : ''), 'Manual');
@@ -164,7 +187,7 @@ function renderHome() {
 
   /* script panels */
   const selCard = el('div', 'card');
-  selCard.append(el('h2', '', 'Hiragana'));
+  selCard.append(el('h2', '', 'Select kana'));
 
   for (const [script, label] of [['hiragana', 'Hiragana'], ['katakana', 'Katakana']]) {
     const m = masteryFor(script);
@@ -187,12 +210,28 @@ function renderHome() {
         if (e.target.closest('.toggle')) return;
         toggleScriptManual(script);
       });
-      panel.style.opacity = state.quiz.groups.includes(script) ? '1' : '.5';
+      const scriptOn = state.quiz.groups.includes(script) || state.quiz.rows.some(k => k.startsWith(script + '|'));
+      panel.style.opacity = scriptOn ? '1' : '.5';
     }
     selCard.append(panel);
     function updatePanel(disableLabel, tog, m) {
       disableLabel.innerHTML = '';
       disableLabel.append(tog);
+    }
+
+    if (state.quiz.mode === 'manual') {
+      const picker = el('div', 'row-picker');
+      KANA[script].groups.forEach(g => {
+        picker.append(el('span', 'group-label', g.name));
+        g.rows.forEach((row, ri) => {
+          const key = script + '|' + g.key + '|' + ri;
+          const chip = el('span', 'stage-chip' + (state.quiz.rows.includes(key) ? ' selected' : ''), rowLabel(row));
+          chip.title = 'Click to ' + (state.quiz.rows.includes(key) ? 'remove' : 'add') + ' · readings: ' + row.map(c => c.r).join(' ');
+          chip.addEventListener('click', () => toggleRow(key));
+          picker.append(chip);
+        });
+      });
+      selCard.append(picker);
     }
   }
 
@@ -233,19 +272,20 @@ function renderHome() {
   const none = el('button', 'btn small', 'None');
   const spacer = el('span', 'spacer');
   countLine.append(selCount, spacer, all, none);
-  all.addEventListener('click', () => { state.quiz.stages = STAGES.map(s => s.id); saveQuiz(); renderHome(); });
-  none.addEventListener('click', () => { state.quiz.stages = []; saveQuiz(); renderHome(); });
+  all.addEventListener('click', () => { state.quiz.stages = STAGES.map(s => s.id); state.quiz.chunkStart = 0; saveQuiz(); renderHome(); });
+  none.addEventListener('click', () => { state.quiz.stages = []; state.quiz.chunkStart = 0; saveQuiz(); renderHome(); });
   stageCard.append(countLine);
 
   const chips = el('div', 'row', '');
   chips.style.marginTop = '12px';
   STAGES.forEach(s => {
-    const chip = el('span', 'stage-chip' + (state.quiz.stages.includes(s.id) ? ' selected' : ''), s.label + ' — ' + s.name);
+    const chip = el('span', 'stage-chip' + (state.quiz.stages.includes(s.id) ? ' selected' : ''), s.label);
     chip.addEventListener('click', () => {
       const i = state.quiz.stages.indexOf(s.id);
       if (i >= 0) state.quiz.stages.splice(i, 1);
       else state.quiz.stages.push(s.id);
       state.quiz.stages.sort((a, b) => a - b);
+      state.quiz.chunkStart = 0;   // changing stages restarts from the beginning
       saveQuiz(); renderHome();
     });
     chips.append(chip);
@@ -280,10 +320,31 @@ function makeToggle(on, change) {
 }
 
 function toggleScriptManual(script) {
-  const gs = state.quiz.groups;
-  if (gs.includes(script)) gs.splice(gs.indexOf(script), 1);
-  else gs.push(script);
+  const allKeys = allRowKeys(script);
+  const on = allKeys.filter(k => state.quiz.rows.includes(k)).length;
+  const turnOn = on === 0;
+  state.quiz.rows = state.quiz.rows.filter(k => !k.startsWith(script + '|'));
+  if (turnOn) state.quiz.rows.push(...allKeys);
   saveQuiz(); renderHome();
+}
+
+function toggleRow(key) {
+  const i = state.quiz.rows.indexOf(key);
+  if (i >= 0) state.quiz.rows.splice(i, 1);
+  else state.quiz.rows.push(key);
+  saveQuiz(); renderHome();
+}
+
+function allRowKeys(script) {
+  const keys = [];
+  const s = KANA[script];
+  if (!s) return keys;
+  s.groups.forEach(g => g.rows.forEach((_, ri) => keys.push(script + '|' + g.key + '|' + ri)));
+  return keys;
+}
+
+function rowLabel(row) {
+  return row.map(c => c.k).join(' ');
 }
 
 /* --- custom group modal --- */
@@ -343,11 +404,23 @@ function activeCharacterPool() {
     for (const id of state.quiz.stages) {
       const s = STAGES.find(x => x.id === id);
       if (!s) continue;
-      for (const sc of s.scripts) for (const g of s.groups) out.push(...allCharacters([sc], [g]));
+      out.push(...s.chars);
     }
   } else {
-    for (const sc of state.quiz.groups) {
-      if (KANA[sc]) for (const g of KANA[sc].groups) out.push(...allCharacters([sc], [g]));
+    const rows = state.quiz.rows || [];
+    if (rows.length) {
+      for (const key of rows) {
+        const parts = key.split('|');
+        const g = KANA[parts[0]] && KANA[parts[0]].groups.find(x => x.key === parts[1]);
+        if (!g) continue;
+        const row = g.rows[parseInt(parts[2], 10)];
+        if (!row) continue;
+        for (const c of row) out.push({ script: parts[0], char: c.k, romaji: c.r, group: g.name });
+      }
+    } else {
+      for (const sc of state.quiz.groups) {
+        if (KANA[sc]) for (const g of KANA[sc].groups) out.push(...allCharacters([sc], [g]));
+      }
     }
     for (const gi of state.quiz.customGroups) {
       const grp = state.custom[gi];
@@ -370,35 +443,9 @@ function masteryScore(char) {
   return s.wrong === 0 ? 1 : 0.6; // have-answered vs perfect
 }
 
-function pickAutomaticCharacter(pool) {
-  // weight imperfect / unlearned characters higher
-  const weights = pool.map(c => {
-    const s = state.stats.byChar[c.script + '|' + c.char];
-    if (!s) return 3;
-    if (s.wrong === 0 && s.answers >= 4) return 0.4;
-    if (s.wrong > s.correct) return 2.5;
-    return 1;
-  });
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < pool.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return pool[i];
-  }
-  return pool[pool.length - 1];
-}
-
 function buildDistractors(pool, correct) {
-  const others = pool.filter(c => !(c.script === correct.script && c.char === correct.char));
-  const set = new Set();
-  const picks = [];
-  for (let i = 0; i < 900 && picks.length < 3; i++) {
-    const cand = others[Math.floor(Math.random() * others.length)];
-    const key = cand.script + '|' + cand.char;
-    if (!set.has(key)) { set.add(key); picks.push(cand); }
-  }
-  while (picks.length < 3) { picks.push(others[Math.floor(Math.random() * others.length)]); }
-  return picks;
+  const others = shuffle(pool.filter(c => !(c.script === correct.script && c.char === correct.char)));
+  return others.slice(0, Math.min(3, others.length));
 }
 
 function shuffle(arr) {
@@ -413,14 +460,22 @@ function shuffle(arr) {
 function startQuiz() {
   const pool = activeCharacterPool();
   if (!pool.length) { toast('No characters selected'); return; }
-  const n = Math.max(3, Math.min(120, parseInt(state.settings.questionCount, 10) || 10));
-  const questions = [];
-  for (let i = 0; i < n; i++) {
-    const c = state.quiz.mode === 'auto' ? pickAutomaticCharacter(pool) : pool[Math.floor(Math.random() * pool.length)];
+  const size = Math.min(ROUND_SIZE, pool.length);
+
+  // work through the pool IN ORDER, 10 at a time: first quiz = chars 1-10,
+  // next = 11-20, and so on. The pointer persists so you continue where you
+  // left off; when the whole pool is done it wraps back to the start.
+  let start = state.quiz.chunkStart || 0;
+  if (start >= pool.length) start = 0;
+  const chunk = shuffle(pool.slice(start, start + size));   // randomise the order within this 10
+  const end = start + chunk.length;
+
+  const questions = chunk.map(c => {
     const showRomaji = state.settings.direction === 'romaji-to-kana' || (state.settings.direction === 'both' && Math.random() < 0.5);
-    questions.push({ char: c, showRomaji });
-  }
-  state.quizSession = { questions, index: 0, correct: 0, wrong: 0, total: questions.length };
+    return { char: c, showRomaji };
+  });
+
+  state.quizSession = { questions, index: 0, correct: 0, wrong: 0, total: questions.length, poolLength: pool.length, chunkStart: start, chunkEnd: end, chunkFinished: end >= pool.length };
   renderQuiz();
 }
 
@@ -433,14 +488,23 @@ function renderQuiz() {
   const top = el('div', 'quiz-top');
   const quit = el('button', 'btn small', '← Quit');
   quit.addEventListener('click', () => { const s2 = state.quizSession; if (s2 && s2.index > 0 && s2.answersEntered) finishQuiz(); else { state.quizSession = null; navigate('home'); } });
-  const title = el('span', '', `Quiz · ${s.index + 1} / ${s.total}`);
+  const rangeLabel = s.poolLength
+    ? ` · chars ${s.chunkStart + 1}–${s.chunkEnd} of ${s.poolLength}`
+    : '';
+  const title = el('span', '', `Quiz · ${s.index + 1}/${s.total}${rangeLabel}`);
   top.append(quit, title);
   root.append(top);
 
   const q = s.questions[s.index];
   const card = el('div', 'quiz-card');
   const qn = el('div', 'prompt-label', q.showRomaji ? 'Choose the kana for' : 'What is this kana?');
-  card.append(qn);
+  const speak = el('button', 'speak-btn', '🔊 Hear');
+  speak.setAttribute('aria-label', 'Pronounce this character');
+  speak.addEventListener('click', () => speakChar(q.char.char));
+  const promptHead = el('div', 'quiz-prompt');
+  promptHead.append(qn, speak);
+  card.append(promptHead);
+  if (state.settings.speakOnQuestion) setTimeout(() => speakChar(q.char.char), 260);
 
   const pool = activeCharacterPool();
   let correctOpt, allOpts;
@@ -490,7 +554,13 @@ function renderQuiz() {
     const note = el('div', 'reveal-note');
     if (isCorrect) note.textContent = 'Correct! ' + q.char.char + ' is "' + q.char.romaji + '".';
     else note.textContent = `Oops! ${q.showRomaji ? q.char.char : '"' + q.char.romaji + '"'} is "${q.showRomaji ? q.char.romaji : q.char.char}".`;
+    note.append(' ');
+    const replay = el('button', 'speak-btn', '🔊 Hear it');
+    replay.style.padding = '4px 12px';
+    replay.addEventListener('click', () => speakChar(q.char.char));
+    note.append(replay);
     card.append(note);
+    setTimeout(() => speakChar(q.char.char), 380);
 
     if (state.settings.autoNext) {
       setTimeout(next, 750);
@@ -533,14 +603,22 @@ function finishQuiz() {
   const root = h();
   root.innerHTML = '';
   const acc = s.total ? Math.round(s.correct / s.total * 100) : 0;
+  const done = (s.index + 1) >= s.total;   // answered every question in the chunk
   const card = el('div', 'quiz-card');
   const stars = acc >= 90 ? '★★★★★' : acc >= 75 ? '★★★★' : acc >= 60 ? '★★★' : acc >= 40 ? '★★' : '★';
   card.append(el('div', 'stars', stars));
   card.append(el('div', 'result-num', acc + '%'));
   card.append(el('p', 'sub', `You answered ${s.correct} of ${s.total} questions correctly.`));
+  if (!done) {
+    card.append(el('p', 'muted tiny', `Not finished — next quiz covers characters ${s.chunkStart + 1}–${s.chunkEnd} again.`));
+  } else if (s.chunkFinished) {
+    card.append(el('p', 'muted tiny', `That was the last chunk — you covered all ${s.poolLength} characters. Next quiz starts over at 1.`));
+  } else {
+    card.append(el('p', 'muted tiny', `Next quiz continues at character ${s.chunkEnd + 1}.`));
+  }
   const row = el('div', 'row');
   row.style.justifyContent = 'center';
-  const again = el('button', 'btn primary', 'Practice again');
+  const again = el('button', 'btn primary', !done ? 'Practice this 10 again' : (s.chunkFinished ? 'Start again from 1' : 'Next 10 characters'));
   const home = el('button', 'btn', 'Back to home');
   row.append(again, home);
   card.append(row);
@@ -548,6 +626,14 @@ function finishQuiz() {
 
   again.addEventListener('click', () => startQuiz());
   home.addEventListener('click', () => { state.quizSession = null; navigate('home'); });
+
+  // advance the persistent pointer only when the whole chunk was answered:
+  // next quiz takes the following 10 in order
+  if (done) {
+    if (s.chunkFinished) state.quiz.chunkStart = 0;
+    else state.quiz.chunkStart = s.chunkEnd;
+    saveQuiz();
+  }
 
   state.stats.sessions.push({ date: Date.now(), correct: s.correct, total: s.total });
   saveStats();
@@ -644,7 +730,7 @@ function showDetail(c, script) {
   (() => {
     const ctx = ref.getContext('2d');
     const color = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
-    ctx.font = '700 ' + Math.round(ref.width * 0.8) + 'px ' + jpFontStackCss();
+    ctx.font = '700 ' + fitGlyphFont(ref.width, c.k, 0.8) + 'px ' + jpFontStackCss();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = color;
     ctx.fillText(c.k, ref.width / 2, ref.height / 2 + ref.height * 0.02);
@@ -808,7 +894,7 @@ function animateWrite(charText, done) {
     /* fallback: classic glyph reveal (fonts can render the glyph offline) */
     const off = document.createElement('canvas'); off.width = W; off.height = H;
     const octx = off.getContext('2d');
-    octx.font = '700 ' + (W * 0.82) + 'px ' + jpFontStackCss();
+    octx.font = '700 ' + fitGlyphFont(W, charText, 0.82) + 'px ' + jpFontStackCss();
     octx.textAlign = 'center'; octx.textBaseline = 'middle';
     octx.fillStyle = '#4a7c59';
     octx.fillText(charText, W / 2, H / 2);
@@ -854,6 +940,13 @@ function animateWrite(charText, done) {
 }
 
 function jpFontStackCss() { return getComputedStyle(document.body).getPropertyValue('--font-jp') || 'sans-serif'; }
+
+function fitGlyphFont(canvasWidth, text, ratio) {
+  const n = [...text].length;   // character count (Yōon/Extended compounds are 2+ kana)
+  const base = (ratio || 0.8) * canvasWidth;
+  if (n <= 1) return Math.round(base);          // single kana: keep the large size
+  return Math.floor((canvasWidth * 0.92) / n);  // multi-kana: shrink so the whole word fits
+}
 
 function speakChar(text) {
   try {
@@ -992,14 +1085,7 @@ function renderSettings() {
   fontSel.addEventListener('change', () => { state.settings.font = fontSel.value; saveSettings(); applyStylePrefs(); });
   const fontRow = el('div', 'setting-row'); fontRow.append(el('span', '', 'Japanese font'), fontSel); rows.push(fontRow);
 
-  const qsel = document.createElement('select');
-  [5, 10, 20, 30, 50].forEach(n => {
-    const o = document.createElement('option'); o.value = n; o.textContent = n + ' questions';
-    if (parseInt(state.settings.questionCount, 10) === n) o.selected = true;
-    qsel.append(o);
-  });
-  qsel.addEventListener('change', () => { state.settings.questionCount = parseInt(qsel.value, 10); saveSettings(); saveQuiz(); });
-  const qRow = el('div', 'setting-row'); qRow.append(el('span', '', 'Session length'), qsel); rows.push(qRow);
+  rows.push(settingRow('Quiz length', 'Fixed: 10 characters at a time, in order — each quiz continues where the last one left off.', el('span', 'muted', '10 each')));
 
   const dsel = document.createElement('select');
   [['both', 'Both directions'], ['kana-to-romaji', 'Kana → reading'], ['romaji-to-kana', 'Reading → kana']].forEach(([v, l]) => {
@@ -1012,6 +1098,10 @@ function renderSettings() {
 
   rows.push(settingRow('Auto-advance', 'Automatically go to the next question', makeToggle(state.settings.autoNext, (on) => {
     state.settings.autoNext = on; saveSettings();
+  })));
+
+  rows.push(settingRow('Auto-pronounce', 'Speak each character when a question is shown', makeToggle(state.settings.speakOnQuestion, (on) => {
+    state.settings.speakOnQuestion = on; saveSettings();
   })));
 
   // font preview
