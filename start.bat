@@ -1,18 +1,17 @@
 @echo off
 rem Learning Japanese - launch helper.
-rem First run: installs the Electron runtime automatically, then starts the app.
+rem First run: installs Node.js and Electron automatically, then starts the app.
 cd /d "%~dp0"
 if exist "node_modules\electron\dist\electron.exe" goto run
-echo Installing Electron for the first time (one-time download, may take a minute)...
-where node >nul 2>nul
+echo First-run setup: installing Node.js and Electron (one-time download)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
 if errorlevel 1 (
-  echo Node.js is not installed. Get it from https://nodejs.org and try again.
+  echo Setup failed. Check your internet connection and try again.
   pause
   exit /b 1
 )
-call npm install
-if errorlevel 1 (
-  echo Installation failed. Make sure Node.js is installed from https://nodejs.org, then try again.
+if not exist "node_modules\electron\dist\electron.exe" (
+  echo Setup finished, but Electron is still missing. Run setup.ps1 manually for details.
   pause
   exit /b 1
 )

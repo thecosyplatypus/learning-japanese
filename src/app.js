@@ -19,7 +19,7 @@ const DEFAULT_SETTINGS = {
   accent: 'red',
   font: 'noto-sans-jp',
   questionCount: 10,
-  direction: 'both',
+  direction: 'romaji-to-kana',
   autoNext: false,
   speakOnQuestion: true
 };
@@ -53,6 +53,7 @@ function buildStages() {
 const STAGES = buildStages();   // e.g. Hiragana 1–10, Hiragana 11–20, …, Katakana …
 
 const ROUND_SIZE = 10;        // characters per quiz (in selection order)
+const REPEATS = 3;            // times each character is quizzed per test
 
 const state = {
   settings: loadOrDefault(LS_KEYS.settings, DEFAULT_SETTINGS),
@@ -71,6 +72,8 @@ const state = {
   route: 'home',
   quizSession: null
 };
+
+if (state.settings.direction === 'both') { state.settings.direction = 'romaji-to-kana'; saveSettings(); }
 
 /* ---------------- persistence helpers ---------------- */
 function loadOrDefault(key, fallback) {
@@ -470,10 +473,26 @@ function startQuiz() {
   const chunk = shuffle(pool.slice(start, start + size));   // randomise the order within this 10
   const end = start + chunk.length;
 
-  const questions = chunk.map(c => {
-    const showRomaji = state.settings.direction === 'romaji-to-kana' || (state.settings.direction === 'both' && Math.random() < 0.5);
-    return { char: c, showRomaji };
-  });
+  // each character in the chunk is quizzed REPEATS times (spaced out, not
+  // back-to-back): e.g. 10 chars x 3 = 30 questions per test
+  const repeated = [];
+  for (let r = 0; r < REPEATS; r++) {
+    for (const c of chunk) {
+      const showRomaji = state.settings.direction === 'romaji-to-kana' || (state.settings.direction === 'both' && Math.random() < 0.5);
+      repeated.push({ char: c, showRomaji });
+    }
+  }
+  let questions = shuffle(repeated);
+  for (let i = 1; i < questions.length; i++) {
+    if (questions[i].char.char === questions[i - 1].char.char) {
+      for (let j = i + 1; j < questions.length; j++) {
+        if (questions[j].char.char !== questions[i - 1].char.char && questions[j].char.char !== questions[i].char.char) {
+          [questions[i], questions[j]] = [questions[j], questions[i]];
+          break;
+        }
+      }
+    }
+  }
 
   state.quizSession = { questions, index: 0, correct: 0, wrong: 0, total: questions.length, poolLength: pool.length, chunkStart: start, chunkEnd: end, chunkFinished: end >= pool.length };
   renderQuiz();

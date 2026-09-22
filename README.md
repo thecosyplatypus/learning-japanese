@@ -6,22 +6,18 @@ and all your progress stays on this device.
 
 ## Run it
 
-1. **Install Node.js** (once) — free from https://nodejs.org. Check it works:
-   ```powershell
-   node -v
-   ```
-2. **Run the programme** — double-click `Learning Japanese.vbs` (recommended,
-   no console window) or `start.bat`. **The first launch installs everything
-   it needs** (the Electron runtime) automatically and then opens the app. No
-   Japanese voice, language pack, or anything else needs installing.
+Double-click `Learning Japanese.vbs` (recommended, no console window) or
+`start.bat`. **The first launch installs everything it needs** — Node.js and
+the Electron runtime — automatically, then opens the app. No Japanese voice,
+language pack, or anything else needs installing.
 
 That's it. After the one-time setup the app runs fully offline.
 
 ## Requirements
 
 - **Windows, macOS, or Linux**
-- **Node.js** (version 16 or newer) — only used to fetch the runtime on first
-  launch. Everything else is installed automatically when you run the programme.
+- **Internet connection** — needed once, for the automatic first-run setup.
+  The app itself runs fully offline afterwards.
 
 ## Terminal use (optional)
 
@@ -76,8 +72,9 @@ src/audio/         bundled pronunciation clips (one WAV per kana)
 src/audio-map.js   kana → clip filename map
 src/app.js         quiz engine, chart, statistics, settings
 main.js            Electron main process (splash + main window)
-start.bat          Windows launcher — auto-installs Electron on first run
-Learning Japanese.vbs  Windows double-click launcher (no console window), auto-installs Electron on first run
+setup.ps1          first-run installer (Node.js + Electron)
+start.bat          Windows launcher — auto-installs Node.js + Electron on first run
+Learning Japanese.vbs  Windows double-click launcher (no console window), same auto-setup
 ```
 
 Offline educational tool for personal kana practice.
