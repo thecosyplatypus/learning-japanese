@@ -584,10 +584,9 @@ function renderQuiz() {
     if (state.settings.autoNext) {
       setTimeout(next, 750);
     } else {
-      const nextBtn = el('button', 'btn primary', s.index + 1 >= s.total ? 'See results' : 'Next');
-      nextBtn.style.marginTop = '16px';
+      const nextBtn = el('button', 'btn primary next-pill', s.index + 1 >= s.total ? 'See results' : 'Next');
       nextBtn.addEventListener('click', next);
-      card.append(nextBtn);
+      root.append(nextBtn);
     }
   }
 
@@ -739,10 +738,15 @@ function showDetail(c, script) {
   /* drawing box — draw it underneath to copy it */
   const drawStage = el('div', 'detail-stage');
   const drawCap = el('div', 'detail-caption', 'Draw it here');
+  const drawWrap = el('div', 'draw-wrap');
+  const guide = el('canvas');
+  guide.width = 260; guide.height = 260;
+  guide.className = 'draw-guide';
   const draw = el('canvas');
   draw.width = 260; draw.height = 260;
   draw.className = 'draw-canvas';
-  drawStage.append(drawCap, draw);
+  drawWrap.append(guide, draw);
+  drawStage.append(drawCap, drawWrap);
   pop.append(drawStage);
 
   /* render the static reference glyph once */
@@ -754,6 +758,25 @@ function showDetail(c, script) {
     ctx.fillStyle = color;
     ctx.fillText(c.k, ref.width / 2, ref.height / 2 + ref.height * 0.02);
   })();
+
+  /* faint traceable outline on the drawing box — toggle it with the Trace button */
+  (() => {
+    const ctx = guide.getContext('2d');
+    ctx.font = '700 ' + fitGlyphFont(guide.width, c.k, 0.8) + 'px ' + jpFontStackCss();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
+    ctx.lineWidth = guide.width * 0.028;
+    ctx.strokeText(c.k, guide.width / 2, guide.height / 2 + guide.height * 0.02);
+  })();
+
+  let traceOn = true;
+  const traceBtn = el('button', 'btn', 'Trace: on');
+  traceBtn.addEventListener('click', () => {
+    guide.style.display = guide.style.display === 'none' ? '' : 'none';
+    traceBtn.textContent = guide.style.display === 'none' ? 'Trace: off' : 'Trace: on';
+  });
 
   /* freehand drawing: ink follows the pointer */
   let clearDraw = null;
@@ -795,7 +818,7 @@ function showDetail(c, script) {
   const speak = el('button', 'speak-btn');
   speak.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 10v4h3l4 4V6l-4 4H4zm11 1a3 3 0 0 0 0-6m0 12a5.5 5.5 0 0 0 0-11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Speak';
   speak.addEventListener('click', () => speakChar(c.k));
-  bar.append(clearBtn, speak);
+  bar.append(clearBtn, traceBtn, speak);
   pop.append(bar);
 
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDetail(); });
@@ -809,7 +832,7 @@ function showDetail(c, script) {
   function closeDetail() {
     overlay.remove();
     document.removeEventListener('keydown', onEsc);
-    renderChart(state.chartScript);
+    document.body.classList.remove('modal-open');
   }
 }
 
@@ -1055,6 +1078,62 @@ function renderStats() {
     }
   }
   root.append(failCard);
+
+  const focusCard = el('div', 'card');
+  focusCard.append(el('h2', '', 'Stage focus'));
+  focusCard.append(el('p', 'muted tiny', 'Breakdown by quiz stage (10 characters each) — the characters in red are what needs practice.'));
+  for (const st of STAGES) {
+    const block = el('div', 'stage-block');
+    const head = el('div', 'stage-head');
+    head.append(el('span', 'stage-label', st.label));
+
+    let answers = 0, correct = 0;
+    const picked = new Map();
+    for (const ch of st.chars) {
+      const k = st.script + '|' + ch.char;
+      const d = byChar[k];
+      picked.set(ch.char, d || null);
+      if (d) { answers += d.answers; correct += d.correct; }
+    }
+
+    if (!answers) {
+      head.append(el('span', 'stage-meta muted', 'no data yet'));
+      block.append(head);
+      focusCard.append(block);
+      continue;
+    }
+
+    const acc = Math.round(correct / answers * 100);
+    const accWrap = el('div', 'stage-acc');
+    const accBar = el('div', 'stage-acc-bar');
+    accBar.style.width = acc + '%';
+    accBar.style.background = acc >= 80 ? 'var(--good)' : 'var(--bad)';
+    accWrap.append(accBar);
+    head.append(accWrap);
+    head.append(el('span', 'stage-meta', `${acc}% · ${answers} ${answers === 1 ? 'answer' : 'answers'}`));
+    block.append(head);
+
+    const weak = st.chars
+      .map(ch => ({ ch, d: picked.get(ch.char) }))
+      .filter(x => x.d && x.d.wrong > 0)
+      .sort((a, b) => b.d.wrong - a.d.wrong || a.d.correct / Math.max(1, a.d.answers) - b.d.correct / Math.max(1, b.d.answers));
+
+    if (weak.length) {
+      const wrap = el('div', 'weak-row');
+      for (const w of weak) {
+        const chip = el('span', 'weak-chip');
+        chip.append(el('span', 'weak-char', w.ch.char));
+        chip.append(el('span', 'weak-romaji', w.ch.romaji));
+        chip.append(el('span', 'weak-x', '×' + w.d.wrong));
+        wrap.append(chip);
+      }
+      block.append(wrap);
+    } else {
+      block.append(el('p', 'muted tiny', 'All correct — nice!'));
+    }
+    focusCard.append(block);
+  }
+  root.append(focusCard);
 
   const reset = el('button', 'btn danger', 'Reset all statistics');
   reset.addEventListener('click', () => {

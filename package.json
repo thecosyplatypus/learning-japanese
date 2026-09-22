@@ -1,6 +1,6 @@
 {
   "name": "learning-japanese",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Learning Japanese – offline quiz app for Japanese Hiragana & Katakana",
   "main": "main.js",
   "scripts": {
