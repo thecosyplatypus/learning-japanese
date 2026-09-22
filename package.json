@@ -1,0 +1,14 @@
+{
+  "name": "learning-japanese",
+  "version": "1.0.0",
+  "description": "Learning Japanese – offline quiz app for Japanese Hiragana & Katakana",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Nested Orbits (offline rebuild)",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
