@@ -713,6 +713,7 @@ function renderChart(initialScript) {
 
 function showDetail(c, script) {
   const root = h();
+  state._detailScroll = root.scrollTop; /* remember where we were before the wipe */
   root.innerHTML = '';
 
   /* dim backdrop + centred popup */
@@ -735,7 +736,7 @@ function showDetail(c, script) {
   refStage.append(refCap, ref);
   pop.append(refStage);
 
-  /* drawing box — draw it underneath to copy it */
+  /* drawing box — character drawn here */
   const drawStage = el('div', 'detail-stage');
   const drawCap = el('div', 'detail-caption', 'Draw it here');
   const drawWrap = el('div', 'draw-wrap');
@@ -829,11 +830,16 @@ function showDetail(c, script) {
 
   setTimeout(() => speakChar(c.k), 160);   // announce it once
 
-  function closeDetail() {
-    overlay.remove();
-    document.removeEventListener('keydown', onEsc);
-    document.body.classList.remove('modal-open');
-  }
+function closeDetail() {
+  overlay.remove();
+  document.removeEventListener('keydown', onEsc);
+  document.body.classList.remove('modal-open');
+  /* opening the detail wiped #content, so bring the chart back — and keep our place */
+  const keep = state._detailScroll || 0;
+  renderChart(state.chartScript);
+  h().scrollTop = keep;
+  state._detailScroll = 0;
+}
 }
 
 let _write = { raf: 0, off: null };
