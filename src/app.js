@@ -1117,7 +1117,7 @@ function renderSettings() {
   fontSel.addEventListener('change', () => { state.settings.font = fontSel.value; saveSettings(); applyStylePrefs(); });
   const fontRow = el('div', 'setting-row'); fontRow.append(el('span', '', 'Japanese font'), fontSel); rows.push(fontRow);
 
-  rows.push(settingRow('Quiz length', 'Fixed: 10 characters at a time, in order — each quiz continues where the last one left off.', el('span', 'muted', '10 each')));
+  rows.push(settingRow('Quiz length', '10 characters at a time, in order — each quiz continues where the last one left off. Every character is quizzed 3 times.', el('span', 'muted', '30 questions')));
 
   const dsel = document.createElement('select');
   [['both', 'Both directions'], ['kana-to-romaji', 'Kana → reading'], ['romaji-to-kana', 'Reading → kana']].forEach(([v, l]) => {

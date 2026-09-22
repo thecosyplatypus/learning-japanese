@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, nativeImage } = require('electron');
 const path = require('path');
 
+const ICON_PATH = path.join(__dirname, 'icon.png');
 const MIN_SPLASH_MS = 3000;   // how long the splash lingers while the app warms up
 
 function createSplash() {
@@ -15,6 +16,7 @@ function createSplash() {
     alwaysOnTop: true,
     center: true,
     show: false,
+    icon: ICON_PATH,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -35,6 +37,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 600,
     title: 'Learning Japanese',
+    icon: ICON_PATH,
     backgroundColor: '#fff',
     show: false,               // shown once ready + splash time has elapsed
     autoHideMenuBar: true,
@@ -53,6 +56,7 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  win.setIcon(nativeImage.createFromPath(ICON_PATH));
 
   win.on('page-title-updated', (e) => e.preventDefault());
 
@@ -69,6 +73,8 @@ function createWindow() {
 }
 
 Menu.setApplicationMenu(null);
+
+app.setAppUserModelId('learning-japanese');   // Windows taskbar grouping + icon
 
 app.whenReady().then(() => {
   app._startedAt = Date.now();
