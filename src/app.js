@@ -809,10 +809,12 @@ function showDetail(c, script) {
 
   /* freehand drawing: ink follows the pointer */
   let clearDraw = null;
+  let penSize = Math.max(3, draw.width * 0.035);
+  let setPenSize = null;
   (() => {
     const ctx = draw.getContext('2d', { willReadFrequently: true });
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(3, draw.width * 0.035);
+    ctx.lineWidth = penSize;
     ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#d9534f';
     let ink = false;
     const pos = (e) => {
@@ -834,6 +836,7 @@ function showDetail(c, script) {
     draw.addEventListener('pointerup', lift);
     draw.addEventListener('pointercancel', lift);
     clearDraw = () => ctx.clearRect(0, 0, draw.width, draw.height);
+    setPenSize = (w) => { penSize = w; ctx.lineWidth = w; };
   })();
 
   const meta = el('div', 'detail-meta');
@@ -842,12 +845,24 @@ function showDetail(c, script) {
   pop.append(meta);
 
   const bar = el('div', 'row center detail-actions');
+  /* pen width stepper — make ink bigger or smaller */
+  const penControl = () => {
+    const group = el('div', 'pen-size');
+    const shrink = el('button', 'btn pen-btn', '−');
+    const val = el('span', 'pen-val', String(Math.round(penSize)));
+    const grow = el('button', 'btn pen-btn', '+');
+    const apply = (w) => { const n = Math.max(2, Math.min(40, w)); setPenSize(n); val.textContent = String(Math.round(n)); };
+    shrink.addEventListener('click', () => apply(penSize - 2));
+    grow.addEventListener('click', () => apply(penSize + 2));
+    group.append(shrink, val, grow);
+    return group;
+  };
   const clearBtn = el('button', 'btn', 'Clear drawing');
   clearBtn.addEventListener('click', () => { if (clearDraw) clearDraw(); });
   const speak = el('button', 'speak-btn');
   speak.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 10v4h3l4 4V6l-4 4H4zm11 1a3 3 0 0 0 0-6m0 12a5.5 5.5 0 0 0 0-11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Speak';
   speak.addEventListener('click', () => speakChar(c.k));
-  bar.append(clearBtn, traceBtn, speak);
+  bar.append(penControl(), clearBtn, traceBtn, speak);
   pop.append(bar);
 
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDetail(); });
