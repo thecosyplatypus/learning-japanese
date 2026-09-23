@@ -751,7 +751,7 @@ function showDetail(c, script) {
   pop.append(refStage);
 
   /* drawing box — character drawn here */
-  const drawStage = el('div', 'detail-stage');
+  const drawStage = el('div', 'detail-stage side-anchored');
   const drawCap = el('div', 'detail-caption', 'Draw it here');
   const drawWrap = el('div', 'draw-wrap');
   const guide = el('canvas');
@@ -760,8 +760,22 @@ function showDetail(c, script) {
   const draw = el('canvas');
   draw.width = 260; draw.height = 260;
   draw.className = 'draw-canvas';
-  drawWrap.append(guide, draw);
-  drawStage.append(drawCap, drawWrap);
+  drawWrap.append(guide, draw.Google);
+
+  /* flanking chevrons on the draw box — previous/next character (same chart order, wraps) */
+  const chev = (dir) => {
+    const b = el('button', 'side-arrow ' + dir);
+    b.setAttribute('aria-label', dir === 'prev' ? 'Previous character' : 'Next character');
+    const d = dir === 'prev' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7';
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true"><path d="' + d + '" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    b.addEventListener('click', () => {
+      closeDetail();
+      showDetail(nextList[(nextId + (dir === 'prev' ? nextList.length - 1 : 1)) % nextList.length], script);
+    });
+    return b;
+  };
+
+  drawStage.append(drawCap, chev('prev'), drawWrap, chev('next'));
   pop.append(drawStage);
 
   /* render the static reference glyph once */
