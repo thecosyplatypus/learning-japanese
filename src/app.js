@@ -724,6 +724,20 @@ function showDetail(c, script) {
   const closeB = el('button', 'icon-btn', '✕');
   closeB.setAttribute('aria-label', 'Close');
   closeB.addEventListener('click', closeDetail);
+
+  /* “Next → ” — hop to the following kana in the same chart order (wraps around) */
+  const kanaFlat = (s) => (KANA[s]?.groups || []).flatMap((gr) => gr.rows.flat());
+  const nextList = kanaFlat(script);
+  const nextId = nextList.indexOf(c);
+  if (nextList.length > 1) {
+    const nextBtn = el('button', 'icon-btn', '→');
+    nextBtn.setAttribute('aria-label', 'Next character');
+    nextBtn.addEventListener('click', () => {
+      closeDetail();
+      showDetail(nextList[(nextId + 1) % nextList.length], script);
+    });
+    head.append(nextBtn);
+  }
   head.append(closeB);
   pop.append(head);
 
