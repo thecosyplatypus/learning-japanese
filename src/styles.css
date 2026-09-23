@@ -360,6 +360,9 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
   display: flex; justify-content: center; gap: 12px; margin-top: 16px; flex-wrap: wrap;
 }
 .detail-actions .speak-btn { font-size: 14px; padding: 9px 16px; }
+.pen-size { display: flex; align-items: center; gap: 2px; }
+.pen-btn { font-size: 18px; line-height: 1; padding: 8px 12px; min-width: 38px; }
+.pen-val { min-width: 30px; text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; }
 
 @media (max-width: 720px) {
   .content { padding: 18px 14px 60px; }
