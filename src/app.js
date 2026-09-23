@@ -760,7 +760,7 @@ function showDetail(c, script) {
   const draw = el('canvas');
   draw.width = 260; draw.height = 260;
   draw.className = 'draw-canvas';
-  drawWrap.append(guide, draw.Google);
+  drawWrap.append(guide, draw);
 
   /* flanking chevrons on the draw box — previous/next character (same chart order, wraps) */
   const chev = (dir) => {
