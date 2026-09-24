@@ -18,10 +18,13 @@ const DEFAULT_SETTINGS = {
   theme: 'light',
   accent: 'red',
   font: 'noto-sans-jp',
-  questionCount: 10,
+  questionCount: 10,   // (kept for compatibility; the length is set by quizChars)
   direction: 'romaji-to-kana',
+  quizChars: 10,       // characters per round — 10, 20 or 30
+  quizThrough: 3,      // times each character is quizzed — 1, 2 or 3
   autoNext: false,
-  speakOnQuestion: true
+  speakOnQuestion: true,
+  penSize: 8           // drawing pen width in px — remembered between sessions
 };
 
 function orderedScriptChars(script) {
@@ -463,7 +466,7 @@ function shuffle(arr) {
 function startQuiz() {
   const pool = activeCharacterPool();
   if (!pool.length) { toast('No characters selected'); return; }
-  const size = Math.min(ROUND_SIZE, pool.length);
+  const size = Math.min(state.settings.quizChars || ROUND_SIZE, pool.length);
 
   // work through the pool IN ORDER, 10 at a time: first quiz = chars 1-10,
   // next = 11-20, and so on. The pointer persists so you continue where you
@@ -476,7 +479,7 @@ function startQuiz() {
   // each character in the chunk is quizzed REPEATS times (spaced out, not
   // back-to-back): e.g. 10 chars x 3 = 30 questions per test
   const repeated = [];
-  for (let r = 0; r < REPEATS; r++) {
+  for (let r = 0; r < (state.settings.quizThrough || REPEATS); r++) {
     for (const c of chunk) {
       const showRomaji = state.settings.direction === 'romaji-to-kana' || (state.settings.direction === 'both' && Math.random() < 0.5);
       repeated.push({ char: c, showRomaji });
@@ -517,13 +520,20 @@ function renderQuiz() {
   const q = s.questions[s.index];
   const card = el('div', 'quiz-card');
   const qn = el('div', 'prompt-label', q.showRomaji ? 'Choose the kana for' : 'What is this kana?');
-  const speak = el('button', 'speak-btn', '🔊 Hear');
-  speak.setAttribute('aria-label', 'Pronounce this character');
-  speak.addEventListener('click', () => speakChar(q.char.char));
+  /* only offer speech when the kana is the QUESTION (kana → reading quiz).
+     On the reading → kana quiz the kana is the ANSWER, so no 🔊 button and
+     no auto-speak — talking would reveal the answer. */
+  const speak = q.showRomaji ? null : el('button', 'speak-btn', '🔊 Hear');
+  if (speak) {
+    speak.setAttribute('aria-label', 'Pronounce this character');
+    speak.addEventListener('click', () => speakChar(q.char.char));
+  }
   const promptHead = el('div', 'quiz-prompt');
-  promptHead.append(qn, speak);
+  promptHead.append(qn);
+  if (speak) promptHead.append(speak);
   card.append(promptHead);
-  if (state.settings.speakOnQuestion) setTimeout(() => speakChar(q.char.char), 260);
+  if (!q.showRomaji && state.settings.speakOnQuestion) setTimeout(() => speakChar(q.char.char), 260);
+
 
   const pool = activeCharacterPool();
   let correctOpt, allOpts;
@@ -809,7 +819,7 @@ function showDetail(c, script) {
 
   /* freehand drawing: ink follows the pointer */
   let clearDraw = null;
-  let penSize = Math.max(3, draw.width * 0.035);
+  let penSize = typeof state.settings.penSize === 'number' ? state.settings.penSize : Math.max(3, draw.width * 0.035);
   let setPenSize = null;
   (() => {
     const ctx = draw.getContext('2d', { willReadFrequently: true });
@@ -847,15 +857,17 @@ function showDetail(c, script) {
   const bar = el('div', 'row center detail-actions');
   /* pen width stepper — make ink bigger or smaller */
   const penControl = () => {
+    const wrap = el('div', 'pen-size-wrap');
     const group = el('div', 'pen-size');
     const shrink = el('button', 'btn pen-btn', '−');
     const val = el('span', 'pen-val', String(Math.round(penSize)));
     const grow = el('button', 'btn pen-btn', '+');
-    const apply = (w) => { const n = Math.max(2, Math.min(40, w)); setPenSize(n); val.textContent = String(Math.round(n)); };
+    const apply = (w) => { const n = Math.max(2, Math.min(40, w)); setPenSize(n); val.textContent = String(Math.round(n)); state.settings.penSize = n; saveSettings(); };
     shrink.addEventListener('click', () => apply(penSize - 2));
     grow.addEventListener('click', () => apply(penSize + 2));
     group.append(shrink, val, grow);
-    return group;
+    wrap.append(group, el('p', 'muted tiny', 'Pen size'));
+    return wrap;
   };
   const clearBtn = el('button', 'btn', 'Clear drawing');
   clearBtn.addEventListener('click', () => { if (clearDraw) clearDraw(); });
@@ -1245,7 +1257,15 @@ function renderSettings() {
   fontSel.addEventListener('change', () => { state.settings.font = fontSel.value; saveSettings(); applyStylePrefs(); });
   const fontRow = el('div', 'setting-row'); fontRow.append(el('span', '', 'Japanese font'), fontSel); rows.push(fontRow);
 
-  rows.push(settingRow('Quiz length', '10 characters at a time, in order — each quiz continues where the last one left off. Every character is quizzed 3 times.', el('span', 'muted', '30 questions')));
+  const quizCharsSel = document.createElement('select');
+  [10, 20, 30].forEach((n) => { const o = document.createElement('option'); o.value = String(n); o.textContent = n + ' characters'; if (state.settings.quizChars === n) o.selected = true; quizCharsSel.append(o); });
+  quizCharsSel.addEventListener('change', () => { state.settings.quizChars = Number(quizCharsSel.value); saveSettings(); });
+  rows.push(settingRow('Quiz length', '10, 20 or 30 characters at a time, in order — each quiz continues where the last one left off.', quizCharsSel));
+
+  const quizThroughSel = document.createElement('select');
+  [1, 2, 3].forEach((n) => { const o = document.createElement('option'); o.value = String(n); o.textContent = n === 1 ? 'Once' : n + ' times'; if (state.settings.quizThrough === n) o.selected = true; quizThroughSel.append(o); });
+  quizThroughSel.addEventListener('change', () => { state.settings.quizThrough = Number(quizThroughSel.value); saveSettings(); });
+  rows.push(settingRow('Times through', 'How many times each character is quizzed — 1, 2 or 3.', quizThroughSel));
 
   const dsel = document.createElement('select');
   [['both', 'Both directions'], ['kana-to-romaji', 'Kana → reading'], ['romaji-to-kana', 'Reading → kana']].forEach(([v, l]) => {
