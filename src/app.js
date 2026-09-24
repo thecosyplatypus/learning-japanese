@@ -520,10 +520,11 @@ function renderQuiz() {
   const q = s.questions[s.index];
   const card = el('div', 'quiz-card');
   const qn = el('div', 'prompt-label', q.showRomaji ? 'Choose the kana for' : 'What is this kana?');
-  /* only offer speech when the kana is the QUESTION (kana → reading quiz).
-     On the reading → kana quiz the kana is the ANSWER, so no 🔊 button and
-     no auto-speak — talking would reveal the answer. */
-  const speak = q.showRomaji ? null : el('button', 'speak-btn', '🔊 Hear');
+  /* speech follows the QUIZ DIRECTION, so it only ever talks when the kana is
+     shown as part of the reading→kana quiz (kana = answer → pronouncing it is
+     the point of that question). On the kana→reading quiz the kana is the
+     QUESTION, so no 🔊 button and no auto-speak — talking would reveal it. */
+  const speak = q.showRomaji ? el('button', 'speak-btn', '🔊 Hear') : null;
   if (speak) {
     speak.setAttribute('aria-label', 'Pronounce this character');
     speak.addEventListener('click', () => speakChar(q.char.char));
@@ -532,7 +533,7 @@ function renderQuiz() {
   promptHead.append(qn);
   if (speak) promptHead.append(speak);
   card.append(promptHead);
-  if (!q.showRomaji && state.settings.speakOnQuestion) setTimeout(() => speakChar(q.char.char), 260);
+  if (q.showRomaji && state.settings.speakOnQuestion) setTimeout(() => speakChar(q.char.char), 260);
 
 
   const pool = activeCharacterPool();
