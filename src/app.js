@@ -754,7 +754,7 @@ function renderChart(initialScript) {
   const isKanji = initialScript === 'kanji';
   root.append(el('h1', '', isKanji ? 'Kanji chart' : 'Kana chart'));
   root.append(el('p', 'sub', isKanji
-    ? 'The 2000 most common kanji, top to bottom by frequency. Tap a character to see readings, meaning and stroke order.'
+    ? 'The 2500 most common kanji, top to bottom by frequency. Tap a character to see readings, meaning and stroke order.'
     : 'Select a character from the kana table to hear its pronunciation and view stroke order.'));
 
   const tabs = el('div', 'tabs chart-tabs');
