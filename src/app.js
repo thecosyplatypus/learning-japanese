@@ -47,6 +47,7 @@ const ROMA = (() => {
 })();
 const romanize = (s) => ROMA(s);
 const dispReading = (ch) => (ch.script === 'kanji' ? ROMA(ch.romaji) : ch.romaji);
+const charToSpeech = (ch) => (ch.script === 'kanji' ? (ch.romaji || ch.char) : ch.char);   // say the reading for kanji, not the glyph
 window.romanizeJp = ROMA;   // console/debug + tests
 
 const LS_KEYS = {
@@ -603,13 +604,13 @@ function renderQuiz() {
   const speak = q.showRomaji ? el('button', 'speak-btn', '🔊 Hear') : null;
   if (speak) {
     speak.setAttribute('aria-label', 'Pronounce this character');
-    speak.addEventListener('click', () => speakChar(q.char.char));
+    speak.addEventListener('click', () => speakChar(charToSpeech(q.char)));
   }
   const promptHead = el('div', 'quiz-prompt');
   promptHead.append(qn);
   if (speak) promptHead.append(speak);
   card.append(promptHead);
-  if (q.showRomaji && state.settings.speakOnQuestion) setTimeout(() => speakChar(q.char.char), 260);
+  if (q.showRomaji && state.settings.speakOnQuestion) setTimeout(() => speakChar(charToSpeech(q.char)), 260);
 
 
   const pool = activeCharacterPool();
@@ -663,10 +664,10 @@ function renderQuiz() {
     note.append(' ');
     const replay = el('button', 'speak-btn', '🔊 Hear it');
     replay.style.padding = '4px 12px';
-    replay.addEventListener('click', () => speakChar(q.char.char));
+    replay.addEventListener('click', () => speakChar(charToSpeech(q.char)));
     note.append(replay);
     card.append(note);
-    setTimeout(() => speakChar(q.char.char), 380);
+    setTimeout(() => speakChar(charToSpeech(q.char)), 380);
 
     if (state.settings.autoNext) {
       setTimeout(next, 750);
@@ -979,7 +980,7 @@ function showDetail(c, script) {
   clearBtn.addEventListener('click', () => { if (clearDraw) clearDraw(); });
   const speak = el('button', 'speak-btn');
   speak.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 10v4h3l4 4V6l-4 4H4zm11 1a3 3 0 0 0 0-6m0 12a5.5 5.5 0 0 0 0-11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Speak';
-  speak.addEventListener('click', () => speakChar(c.k));
+  speak.addEventListener('click', () => speakChar(script === 'kanji' ? c.r : c.k));
   bar.append(penControl(), clearBtn, traceBtn, speak);
   pop.append(bar);
 
@@ -989,7 +990,7 @@ function showDetail(c, script) {
   overlay.append(pop);
   root.append(overlay);
 
-  setTimeout(() => speakChar(c.k), 160);   // announce it once
+  setTimeout(() => speakChar(script === 'kanji' ? c.r : c.k), 160);   // announce the reading once
 
 function closeDetail() {
   overlay.remove();
@@ -1159,18 +1160,47 @@ function fitGlyphFont(canvasWidth, text, ratio) {
 
 let _audio = null;
 
+/* Play a multi-kana string (e.g. a kanji reading "ニチ") by chaining the
+   bundled per-kana clips, longest match first so digraphs (キョ) stay intact.
+   Returns false when no clips matched (silent marks like ー/っ are skipped). */
+function speakChain(text) {
+  if (typeof AudioMap === 'undefined' || !text) return false;
+  const keys = Object.keys(AudioMap).sort((a, b) => b.length - a.length);
+  const files = [];
+  for (let i = 0; i < text.length;) {
+    const hit = keys.find(k => text.startsWith(k, i));
+    if (hit) { files.push(AudioMap[hit]); i += hit.length; } else i++;
+  }
+  if (!files.length) return false;
+  if (_audio) { _audio.pause(); _audio.onended = null; _audio = null; }
+  let idx = 0;
+  const next = () => {
+    if (idx >= files.length) { _audio = null; return; }
+    _audio = new Audio('audio/' + files[idx++]);
+    _audio.volume = 1;
+    _audio.onended = () => next();
+    const p = _audio.play();
+    if (p && p.catch) p.catch(() => { next(); });
+  };
+  next();
+  return true;
+}
+
 function speakChar(text) {
   // 1) prefer the bundled pronunciation clips (fully offline, no OS voice needed)
   const file = (typeof AudioMap !== 'undefined') ? AudioMap[text] : null;
-  if (file) {
-    try {
-      if (_audio) { _audio.pause(); _audio = null; }
-      _audio = new Audio('audio/' + file);
-      _audio.volume = 1;
-      const p = _audio.play();
-      if (p && p.catch) p.catch(() => {});
-      return;
-    } catch { /* fall through to OS speech */ }
+  if (file || (typeof AudioMap !== 'undefined' && speakChain(text))) {
+    if (file) {
+      try {
+        if (_audio) { _audio.pause(); _audio = null; }
+        _audio = new Audio('audio/' + file);
+        _audio.volume = 1;
+        const p = _audio.play();
+        if (p && p.catch) p.catch(() => {});
+        return;
+      } catch { /* fall through to OS speech */ }
+    }
+    return;
   }
   // 2) fallback: OS text-to-speech (only used when a clip isn't bundled)
   try {
@@ -1179,15 +1209,13 @@ function speakChar(text) {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP';
     u.rate = 0.9;
+    // Prefer a Japanese voice, but don't give up when the voice list isn't
+    // populated yet — the engine picks a suitable voice for the lang tag.
     const all = speechSynthesis.getVoices();
     const v = all.find(vv => vv.lang && vv.lang.replace('_', '-').toLowerCase().startsWith('ja')) ||
               all.find(vv => vv.lang && /ja|jpn/i.test(vv.lang));
-    if (v) {
-      u.voice = v;
-      speechSynthesis.speak(u);
-      return;
-    }
-    toast('No Japanese voice on this device.');
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
   } catch { toast('Speech not available'); }
 }
 if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
