@@ -7,6 +7,8 @@
     "start": "electron .",
     "android:sync": "cap sync android",
     "android:apk": "cap sync android && cd android && gradlew.bat assembleDebug --no-daemon",
+    "android:release": "cap sync android && cd android && gradlew.bat assembleRelease --no-daemon",
+    "android:aab": "cap sync android && cd android && gradlew.bat bundleRelease --no-daemon",
     "android:open": "cap open android",
     "android:install": "cap sync android && cd android && gradlew.bat installDebug --no-daemon",
     "android:run": "cap run android",

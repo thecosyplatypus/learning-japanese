@@ -69,6 +69,8 @@ Other useful scripts:
 | Script | What it does |
 | --- | --- |
 | `npm run android:apk` | Sync `src/` and build the debug APK |
+| `npm run android:release` | Sync `src/` and build the **signed release APK** (see below) |
+| `npm run android:aab` | Build a signed `.aab` bundle (for Google Play) |
 | `npm run android:install` | Build and install onto a connected device/emulator |
 | `npm run android:run` | Build, install and launch with live reload |
 | `npm run android:open` | Open the native project in Android Studio |
@@ -82,8 +84,33 @@ again to copy your changes into the app — the native project does not watch th
 `src/` folder. `icon.png` is the source for the launcher icon; after replacing
 it, run `npm run android:icons` and rebuild.
 
-For a shareable or Play Store build, add a signing key and run
-`cd android; gradlew.bat assembleRelease` (or `bundleRelease` for an `.aab`).
+### Release builds (signed APK)
+
+The debug APK is signed with Android's public debug key, so Play Protect flags
+it as untrusted. For people to install without that warning, build a release
+APK signed with your own private key:
+
+```powershell
+npm run android:release
+```
+
+Output: `android/app/build/outputs/apk/release/app-release.apk`.
+
+The signing key was created once with `keytool` and lives at
+`android/keystores/learningjapanese-release.jks`, with the passwords in
+`android/keystore.properties`. Both files are git-ignored on purpose — **back
+them up and never lose them**: every future update must be signed with the
+same key, or existing installs cannot be updated. (To recreate: run
+`keytool -genkeypair -v -keystore android/keystores/learningjapanese-release.jks -storetype JKS -alias learningjapanese -keyalg RSA -keysize 2048 -validity 10000`.)
+
+A release-signed APK stops the Play Protect / debug-signed install warning.
+Two warnings signing does **not** remove (both are normal for any sideloaded
+APK): the browser's "this file can harm your device" banner when downloading,
+and the OS "install from unknown apps" permission prompt. Only publishing via
+Google Play removes those.
+
+For Google Play, use `npm run android:aab` (needs the `google-services.json`
+setup and a Play Console account).
 
 ### Test on an emulator
 
