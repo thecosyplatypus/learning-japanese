@@ -161,6 +161,11 @@ document.querySelectorAll('[data-route]').forEach(a => {
 document.getElementById('menu-toggle').addEventListener('click', () => {
   document.getElementById('sidebar').classList.toggle('collapsed');
 });
+document.querySelectorAll('.sidebar .nav-item').forEach(a => {
+  a.addEventListener('click', () => {
+    if (window.innerWidth <= 720) document.getElementById('sidebar').classList.add('collapsed');
+  });
+});
 
 /* ============================================================
    HOME / QUIZ SETUP
