@@ -228,12 +228,11 @@ h2 { font-size: 17px; margin: 0 0 10px; }
 /* ---------- chart ---------- */
 .chart-tabs { margin-bottom: 18px; }
 .kana-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
-.kana-cell { border: 1px solid var(--border); border-radius: 10px; padding: 10px 4px 8px; text-align: center; cursor: pointer; background: var(--panel); min-width: 0; }
+.kana-cell { position: relative; border: 1px solid var(--border); border-radius: 10px; min-height: 80px; text-align: center; cursor: pointer; background: var(--panel); min-width: 0; }
 .kana-cell:hover { border-color: var(--primary); }
-.kana-cell .k { font-size: 30px; font-family: var(--font-jp); font-weight: 700; line-height: 1.1; }
+.kana-cell .k { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); font-size: 30px; font-family: var(--font-jp); font-weight: 700; line-height: 1; }
 .kana-cell.kanji .k { font-size: 32px; }
-.kana-cell .r { font-size: 13px; color: var(--muted); margin-top: 4px; word-break: break-word; line-height: 1.15; }
-.kana-cell .en { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.2; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kana-cell .r { position: absolute; left: 3px; right: 3px; bottom: 6px; font-size: 13px; color: var(--muted); word-break: break-word; line-height: 1.15; }
 .detail-readings { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 6px 0; }
 .detail-chip { font-size: 14px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); font-family: var(--font-jp); }
 .detail-chip.on { color: var(--on-color, #0a5c8a); }
