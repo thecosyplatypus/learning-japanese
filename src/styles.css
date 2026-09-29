@@ -305,7 +305,7 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
 
 .chart-grid-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-bottom: 10px; justify-items: stretch; }
 .chart-group { margin-bottom: 22px; }
-.chart-group h3 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; position: sticky; top: 0; z-index: 2; background: var(--bg, #fff); padding: 6px 0 4px; }
+.chart-group h3 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; position: sticky; top: 0; z-index: 2; background: var(--bg, #fff); padding: 6px 0 4px; text-align: center; }
 .pdf-btn { margin-left: auto; }
 
 /* ---------- detail popup (modal) ---------- */
