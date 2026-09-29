@@ -29,6 +29,7 @@ app.whenReady().then(async () => {
         const cells = document.querySelectorAll('.kana-cell');
         const first = document.querySelector('.kana-cell');
         const firstEn = first ? first.querySelector('.en') : null;
+        const firstR = first ? first.querySelector('.r') : null;
         let detail = null;
         if (first) {
           first.click();
@@ -42,7 +43,7 @@ app.whenReady().then(async () => {
           const closeBtn = [...pop.querySelectorAll('button')].find(b => b.textContent.trim() === 'Close');
           if (closeBtn) closeBtn.click();
         }
-        kanji = { cells: cells.length, first: first ? first.querySelector('.k').textContent : null, firstEn: firstEn ? firstEn.textContent : null, detail };
+        kanji = { cells: cells.length, first: first ? first.querySelector('.k').textContent : null, firstR: firstR ? firstR.textContent : null, firstEn: firstEn ? firstEn.textContent : null, detail };
       }
       q('home').click();
       const startBtn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Start');

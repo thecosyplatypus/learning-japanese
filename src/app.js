@@ -8,6 +8,47 @@
 const { KANA, allCharacters, totalCount } = window.KanaData;
 if (window.KanjiData) KANA.kanji = window.KanjiData.KANA_SCRIPT;   // 'kanji' script, KANA-compatible
 
+/* Romanize any kana string for plain-English pronunciation (nichi, hi, -bi, -ka).
+   Used for kanji readings so learners can say them without knowing kana. */
+const ROMA = (() => {
+  const map = new Map();
+  for (const script of ['hiragana', 'katakana']) {
+    for (const g of KANA[script].groups) for (const row of g.rows) for (const c of row) {
+      if (!map.has(c.k)) map.set(c.k, c.r);
+    }
+  }
+  const keys = [...map.keys()].sort((a, b) => b.length - a.length);
+  const VOWELS = new Set(['a', 'i', 'u', 'e', 'o']);
+  return (s) => {
+    if (!s) return '';
+    let out = '';
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === '.' || ch === '-' || ch === '/') { out += ch; continue; }
+      if (ch === 'っ' || ch === 'ッ') {
+        const nxt = s[i + 1];
+        const rn = nxt ? map.get(nxt) : null;
+        out += rn ? (rn[0] === 'c' && rn.startsWith('ch') ? 't' + rn : rn[0] + rn) : 't';
+        i += rn ? 1 : 0;   // doubled form already includes the next kana's sound
+        continue;
+      }
+      if (ch === 'ー') {
+        let v = '';
+        for (let j = out.length - 1; j >= 0; j--) { if (VOWELS.has(out[j])) { v = out[j]; break; } }
+        out += v || '';
+        continue;
+      }
+      const hit = keys.find(k => s.startsWith(k, i));
+      if (hit) { out += map.get(hit); i += hit.length - 1; continue; }
+      out += ch;
+    }
+    return out;
+  };
+})();
+const romanize = (s) => ROMA(s);
+const dispReading = (ch) => (ch.script === 'kanji' ? ROMA(ch.romaji) : ch.romaji);
+window.romanizeJp = ROMA;   // console/debug + tests
+
 const LS_KEYS = {
   settings: 'kana_settings_v1',
   stats: 'kana_stats_v1',
@@ -574,14 +615,14 @@ function renderQuiz() {
   const pool = activeCharacterPool();
   let correctOpt, allOpts;
   if (q.showRomaji) {
-    card.append(el('div', 'prompt-romaji', q.char.romaji));
+    card.append(el('div', 'prompt-romaji', dispReading(q.char)));
     const dist = buildDistractors(pool, q.char).map(d => d.char);
     correctOpt = q.char.char;
     allOpts = shuffle([correctOpt, ...dist]);
   } else {
     card.append(el('div', 'prompt-char' + (q.char.char.length > 1 ? ' small' : ''), q.char.char));
-    const dist = buildDistractors(pool, q.char).map(d => d.romaji);
-    correctOpt = q.char.romaji;
+    const dist = buildDistractors(pool, q.char).map(d => dispReading(d));
+    correctOpt = dispReading(q.char);
     allOpts = shuffle([correctOpt, ...dist]);
   }
 
@@ -617,8 +658,8 @@ function renderQuiz() {
     if (btn.textContent !== correctOpt) btn.classList.add('wrong');
 
     const note = el('div', 'reveal-note');
-    if (isCorrect) note.textContent = 'Correct! ' + q.char.char + ' is "' + q.char.romaji + '".';
-    else note.textContent = `Oops! ${q.showRomaji ? q.char.char : '"' + q.char.romaji + '"'} is "${q.showRomaji ? q.char.romaji : q.char.char}".`;
+    if (isCorrect) note.textContent = 'Correct! ' + q.char.char + ' is "' + dispReading(q.char) + '".';
+    else note.textContent = `Oops! ${q.showRomaji ? q.char.char : '"' + dispReading(q.char) + '"'} is "${q.showRomaji ? dispReading(q.char) : q.char.char}".`;
     note.append(' ');
     const replay = el('button', 'speak-btn', '🔊 Hear it');
     replay.style.padding = '4px 12px';
@@ -735,7 +776,7 @@ function renderChart(initialScript) {
         const cell = el('div', 'kana-cell');
         cell.append(el('div', 'k', c.k));
         if (isKanji) cell.classList.add('kanji');
-        cell.append(el('div', 'r', c.r));
+        cell.append(el('div', 'r', isKanji ? romanize(c.r) : c.r));
         if (isKanji && window.KanjiData) {
           const info = window.KanjiData.BY_CHAR[c.k];
           if (info && info.m) cell.append(el('div', 'en', info.m));
@@ -897,12 +938,16 @@ function showDetail(c, script) {
   const meta = el('div', 'detail-meta');
   const kanji = (script === 'kanji' && window.KanjiData) ? window.KanjiData.BY_CHAR[c.k] : null;
   if (kanji) {
-    meta.append(el('h1', '', kanji.r || c.r));
+    meta.append(el('h1', '', romanize(kanji.r || c.r)));
     const chips = el('div', 'detail-readings');
     const add = (label, arr, cls) => {
       if (!arr || !arr.length) return;
       chips.append(el('span', 'muted tiny', label + ' '));
-      arr.forEach(x => chips.append(el('span', 'detail-chip ' + cls, x)));
+      arr.forEach(x => {
+        const ch = el('span', 'detail-chip ' + cls, romanize(x));
+        ch.title = x;
+        chips.append(ch);
+      });
     };
     add('On', kanji.on, 'on');
     add('Kun', kanji.kun, 'kun');
