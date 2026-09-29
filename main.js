@@ -51,7 +51,9 @@ function createWindow() {
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    /* only ever hand ordinary web links to the OS browser - never file://,
+       javascript: or any other scheme the renderer might try */
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 

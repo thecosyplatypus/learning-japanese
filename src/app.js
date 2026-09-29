@@ -165,14 +165,80 @@ const routes = {
   settings: renderSettings
 };
 
-function navigate(route, extra) {
+/* ---------- session history (the Android back gesture) ----------
+   The router used to ignore the session history entirely, so the WebView had
+   nothing to go back to: pressing back on Stats, Settings, the chart or the
+   detail popup quit the app outright. Every navigation now pushes an entry and
+   popstate unwinds it.
+
+   The detail popup deliberately does NOT get its own entry. Pushing a sentinel
+   on open and popping it on close races history.back() against pushState() and
+   loses steps. Instead, back with the popup open consumes one entry and puts an
+   equivalent one straight back, so the depth is unchanged and the route holds.
+
+   Depth is tracked in a counter rather than read from history.length, which is a
+   high-water mark: it counts every entry ever pushed and never shrinks, so on
+   the home screen it would still read 2 and Android would keep intercepting back
+   instead of letting the app close. Each entry also carries its own depth so a
+   pop can restore the count from the entry it landed on. */
+
+let backDepth = 0;
+
+function pushHistory(entry) {
+  const next = Object.assign({}, entry, { ljDepth: backDepth + 1 });
+  try { history.pushState(next, ''); } catch (e) { /* history unavailable */ return; }
+  backDepth = next.ljDepth;
+  syncBackDepth();
+}
+function goBack() {
+  try { history.back(); } catch (e) { /* nothing to go back to */ }
+}
+
+/* MainActivity can't use WebView.canGoBack() to decide whether the back gesture
+   belongs to the page: that only reports *document* navigations, so it stays
+   false for the entries the router pushes here. The page therefore publishes its
+   own depth, and Android enables the back callback only while it is non-zero. */
+function syncBackDepth() {
+  const host = window.LJBack;
+  if (!host) return;
+  try { host.setDepth(backDepth); } catch (e) { /* bridge gone */ }
+}
+
+function navigate(route, extra, fromPop) {
   state.route = route;
   document.querySelectorAll('.nav-item').forEach(a => {
     a.classList.toggle('active', a.dataset.route === route);
   });
   routes[route](extra);
   content.scrollTop = 0;
+  if (fromPop) return;
+  pushHistory({ ljRoute: route });
 }
+
+window.addEventListener('popstate', (e) => {
+  const st = e.state || {};
+
+  /* restore the depth from the entry we landed on before anything else */
+  backDepth = typeof st.ljDepth === 'number' ? st.ljDepth : 0;
+  syncBackDepth();
+
+  /* the detail popup is modal: back closes it and must not change route. The
+     entry just consumed is replaced with an equivalent one so the net depth and
+     the route are unchanged. */
+  if (document.querySelector('.modal-overlay')) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    backDepth = Math.max(0, backDepth);
+    pushHistory({ ljRoute: state.route });
+    return;
+  }
+
+  /* back fell off the quiz entry: end the round and show the home screen */
+  if (state.quizSession && !st.ljQuiz) state.quizSession = null;
+
+  const r = st.ljRoute;
+  if (r && routes[r]) navigate(r, undefined, true);
+  else if (state.route !== 'home') navigate('home', undefined, true);
+});
 
 /* ---------------- theme/font boot ---------------- */
 function syncSystemBars() {
@@ -198,6 +264,9 @@ document.body.classList.add('booting');
 applyStylePrefs();
 
 /* ---------------- nav wiring ---------------- */
+const sidebar = document.getElementById('sidebar');
+const NARROW = 720;
+
 document.querySelectorAll('[data-route]').forEach(a => {
   a.addEventListener('click', (e) => {
     e.preventDefault();
@@ -205,12 +274,26 @@ document.querySelectorAll('[data-route]').forEach(a => {
   });
 });
 document.getElementById('menu-toggle').addEventListener('click', () => {
-  document.getElementById('sidebar').classList.toggle('collapsed');
+  sidebar.classList.toggle('collapsed');
 });
 document.querySelectorAll('.sidebar .nav-item').forEach(a => {
   a.addEventListener('click', () => {
-    if (window.innerWidth <= 720) document.getElementById('sidebar').classList.add('collapsed');
+    if (window.innerWidth <= NARROW) sidebar.classList.add('collapsed');
   });
+});
+
+/* The sidebar is a permanent 216px column on wide screens and an overlay on
+   narrow ones. Collapse state is only ever set here, so without this a session
+   that used a phone-sized window (or a rotation, a fold, or a move to
+   split-screen) would leave the tablet/foldable layout stuck with a hidden
+   sidebar. Re-apply the mode whenever the width crosses the breakpoint. */
+let wasNarrow = window.innerWidth <= NARROW;
+if (wasNarrow) sidebar.classList.add('collapsed');
+window.addEventListener('resize', () => {
+  const isNarrow = window.innerWidth <= NARROW;
+  if (isNarrow === wasNarrow) return;
+  wasNarrow = isNarrow;
+  sidebar.classList.toggle('collapsed', isNarrow);
 });
 
 /* ============================================================
@@ -572,6 +655,7 @@ function startQuiz() {
   }
 
   state.quizSession = { questions, index: 0, correct: 0, wrong: 0, total: questions.length, poolLength: pool.length, chunkStart: start, chunkEnd: end, chunkFinished: end >= pool.length };
+  pushHistory({ ljQuiz: true });   /* so back leaves the quiz instead of the app */
   renderQuiz();
 }
 
@@ -583,7 +667,7 @@ function renderQuiz() {
 
   const top = el('div', 'quiz-top');
   const quit = el('button', 'btn small', '← Quit');
-  quit.addEventListener('click', () => { const s2 = state.quizSession; if (s2 && s2.index > 0 && s2.answersEntered) finishQuiz(); else { state.quizSession = null; navigate('home'); } });
+  quit.addEventListener('click', () => { const s2 = state.quizSession; if (s2 && s2.index > 0 && s2.answersEntered) finishQuiz(); else { state.quizSession = null; goBack(); } });
   const rangeLabel = s.poolLength
     ? ` · chars ${s.chunkStart + 1}–${s.chunkEnd} of ${s.poolLength}`
     : '';
@@ -731,7 +815,7 @@ function finishQuiz() {
   root.append(card);
 
   again.addEventListener('click', () => startQuiz());
-  home.addEventListener('click', () => { state.quizSession = null; navigate('home'); });
+  home.addEventListener('click', () => { state.quizSession = null; goBack(); });
 
   // advance the persistent pointer only when the whole chunk was answered:
   // next quiz takes the following 10 in order
@@ -1482,7 +1566,12 @@ function settingRow(label, desc, control) {
 
 /* ---------------- boot ---------------- */
 function boot() {
-  navigate('home');
+  /* seed the root entry in place rather than pushing, so that pressing back
+     on the home screen exits the app (WebView history is then length 1) */
+  navigate('home', undefined, true);
+  try { history.replaceState({ ljRoute: 'home', ljDepth: 0 }, ''); } catch (e) {}
+  backDepth = 0;
+  syncBackDepth();
   document.body.classList.remove('booting');
   setTimeout(() => document.getElementById('boot').remove(), 150);
 }

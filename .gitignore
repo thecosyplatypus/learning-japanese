@@ -6,6 +6,12 @@ release/
 .DS_Store
 Thumbs.db
 
+# Working captures. play-assets/ holds the final Play-ready, 24-bit RGB set and
+# is committed; these are the raw/intermediate versions of the same screens.
+android-shots/
+play-screenshots/
+kanji-grid-preview.html
+
 # Android / Capacitor
 android/local.properties
 android/.gradle/

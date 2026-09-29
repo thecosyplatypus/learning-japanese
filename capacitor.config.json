@@ -6,6 +6,6 @@
     "backgroundColor": "#f8f7f5",
     "allowMixedContent": false,
     "captureInput": true,
-    "webContentsDebuggingEnabled": true
+    "webContentsDebuggingEnabled": false
   }
 }

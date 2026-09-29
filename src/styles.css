@@ -60,7 +60,10 @@ body.booting .boot { display: flex; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- shell layout ---------- */
-.shell { height: 100vh; display: flex; flex-direction: column; }
+/* dvh (dynamic viewport) is what we actually want: 100vh stays the size of the
+   largest possible viewport, so it does not shrink on a foldable posture
+   change or in split-screen. Older engines fall back to vh. */
+.shell { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
 .topbar {
   min-height: 56px; flex: 0 0 auto;
   display: flex; align-items: center; gap: 10px;
@@ -228,11 +231,11 @@ h2 { font-size: 17px; margin: 0 0 10px; }
 /* ---------- chart ---------- */
 .chart-tabs { margin-bottom: 18px; }
 .kana-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
-.kana-cell { position: relative; border: 1px solid var(--border); border-radius: 10px; min-height: 80px; text-align: center; cursor: pointer; background: var(--panel); min-width: 0; }
+.kana-cell { position: relative; border: 1px solid var(--border); border-radius: 10px; min-height: 80px; padding: 8px 4px; text-align: center; cursor: pointer; background: var(--panel); min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
 .kana-cell:hover { border-color: var(--primary); }
-.kana-cell .k { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); font-size: 30px; font-family: var(--font-jp); font-weight: 700; line-height: 1; }
+.kana-cell .k { position: static; top: auto; left: auto; right: auto; bottom: auto; transform: none; width: 100%; font-size: 30px; font-family: var(--font-jp); font-weight: 700; line-height: 1.05; }
 .kana-cell.kanji .k { font-size: 32px; }
-.kana-cell .r { position: absolute; left: 3px; right: 3px; bottom: 6px; font-size: 13px; color: var(--muted); word-break: break-word; line-height: 1.15; }
+.kana-cell .r { position: static; top: auto; left: auto; right: auto; bottom: auto; width: 100%; font-size: 13px; color: var(--muted); word-break: break-word; line-height: 1.15; }
 .detail-readings { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 6px 0; }
 .detail-chip { font-size: 14px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); font-family: var(--font-jp); }
 .detail-chip.on { color: var(--on-color, #0a5c8a); }
@@ -320,7 +323,7 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
 @keyframes fadein { from { opacity: 0; } }
 .detail-popup {
   --popup-w: min(92vw, 460px);
-  width: var(--popup-w); max-height: 92vh; overflow: auto;
+  width: var(--popup-w); max-height: 92vh; max-height: 92dvh; overflow: auto;
   background: var(--panel); color: var(--text);
   border: 1px solid var(--border); border-radius: 18px;
   box-shadow: 0 24px 70px rgba(0,0,0,.4), var(--shadow);
@@ -387,4 +390,29 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
   .sidebar.collapsed { margin-left: 0; transform: translateX(calc(-100% - 18px)); }
   .options { grid-template-columns: 1fr; }
   .prompt-char { font-size: 72px; }
+}
+
+/* ---------- large screens: 7"/10" tablets and unfolded foldables ----------
+   These are container queries, not media queries, so they react to the real
+   width of the scrolling column (viewport minus the sidebar) rather than the
+   viewport itself. .content already declares container-type: inline-size. */
+@container (min-width: 780px) {
+  /* Bigger touch targets and fewer, wider rows on a big screen. */
+  .kana-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+  .kana-cell { min-height: 92px; }
+  .kana-cell.kanji .k { font-size: 36px; }
+  .prompt-char { font-size: 96px; }
+}
+
+/* Cap line length so prose and settings rows stay readable instead of
+   stretching edge to edge. Grids (.stat-grid, .kana-grid) are deliberately
+   left uncapped - they use extra width productively. */
+@container (min-width: 900px) {
+  .content h1,
+  .sub,
+  .options,
+  .setting-row,
+  .special-list,
+  .script-panel,
+  .draw-guide { max-width: 1080px; margin-inline: auto; }
 }
