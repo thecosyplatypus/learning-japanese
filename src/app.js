@@ -778,10 +778,6 @@ function renderChart(initialScript) {
         cell.append(el('div', 'k', c.k));
         if (isKanji) cell.classList.add('kanji');
         cell.append(el('div', 'r', isKanji ? romanize(c.r) : c.r));
-        if (isKanji && window.KanjiData) {
-          const info = window.KanjiData.BY_CHAR[c.k];
-          if (info && info.m) cell.append(el('div', 'en', info.m));
-        }
         cell.addEventListener('click', () => showDetail(c, active));
         r.append(cell);
       }
