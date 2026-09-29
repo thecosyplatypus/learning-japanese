@@ -5,3 +5,16 @@ release/
 *.log
 .DS_Store
 Thumbs.db
+
+# Android / Capacitor
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins/
+*.apk
+*.aab
+*.keystore

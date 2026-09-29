@@ -4,11 +4,23 @@
   "description": "Learning Japanese – offline quiz app for Japanese Hiragana & Katakana",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "android:sync": "cap sync android",
+    "android:apk": "cap sync android && cd android && gradlew.bat assembleDebug --no-daemon",
+    "android:open": "cap open android",
+    "android:install": "cap sync android && cd android && gradlew.bat installDebug --no-daemon",
+    "android:run": "cap run android",
+    "android:icons": "powershell -ExecutionPolicy Bypass -File .\\make-android-icons.ps1"
   },
   "author": "Nested Orbits (offline rebuild)",
   "license": "MIT",
   "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "@capacitor/status-bar": "^8.0.3"
   }
 }

@@ -129,6 +129,14 @@ function navigate(route, extra) {
 }
 
 /* ---------------- theme/font boot ---------------- */
+function syncSystemBars() {
+  const cap = window.Capacitor;
+  if (!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;   // Electron build has no status bar
+  const bar = cap.Plugins && cap.Plugins.StatusBar;
+  if (!bar) return;
+  bar.setStyle({ style: state.settings.theme === 'dark' ? 'DARK' : 'LIGHT' });
+}
+
 function applyStylePrefs() {
   document.documentElement.dataset.theme = state.settings.theme;
   document.documentElement.dataset.accent = state.settings.accent;
@@ -138,6 +146,7 @@ function applyStylePrefs() {
     'zen-maru-gothic': "'Yu Gothic UI', 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif"
   };
   document.documentElement.style.setProperty('--font-jp', f[state.settings.font] || f['noto-sans-jp']);
+  syncSystemBars();
 }
 document.body.classList.add('booting');
 applyStylePrefs();

@@ -1,6 +1,7 @@
 # Learning Japanese
 
-A fully offline desktop app for learning Japanese Hiragana & Katakana.
+A fully offline app for learning Japanese Hiragana & Katakana, available as a
+Windows/macOS/Linux desktop app and an Android `.apk`.
 No account, no internet after the first run,
 and all your progress stays on this device.
 
@@ -49,6 +50,61 @@ npx electron-builder --win
 
 Output lands in the `dist/` folder.
 
+## Build an Android .apk
+
+The same `src/` web app also runs on Android, wrapped in a native shell by
+Capacitor. The Electron desktop build is completely unaffected.
+
+```powershell
+npm run android:apk
+```
+
+Output: `android/app/build/outputs/apk/debug/app-debug.apk`.
+Copy it to a phone and open it (you'll need to allow installs from your file
+manager once). A copy is also left at the repo root as
+`LearningJapanese-0.5.0-debug.apk`.
+
+Other useful scripts:
+
+| Script | What it does |
+| --- | --- |
+| `npm run android:apk` | Sync `src/` and build the debug APK |
+| `npm run android:install` | Build and install onto a connected device/emulator |
+| `npm run android:run` | Build, install and launch with live reload |
+| `npm run android:open` | Open the native project in Android Studio |
+| `npm run android:icons` | Regenerate the launcher icons from `icon.png` |
+| `npm run android:sync` | Copy `src/` into the native project without building |
+
+**Rebuilding from scratch** needs the Android SDK (platform 36 + build-tools 35
+or newer) and a JDK 21, with the SDK path in `android/local.properties` or
+`ANDROID_HOME`. Editing anything in `src/` means running `npm run android:apk`
+again to copy your changes into the app — the native project does not watch the
+`src/` folder. `icon.png` is the source for the launcher icon; after replacing
+it, run `npm run android:icons` and rebuild.
+
+For a shareable or Play Store build, add a signing key and run
+`cd android; gradlew.bat assembleRelease` (or `bundleRelease` for an `.aab`).
+
+### Test on an emulator
+
+```powershell
+# once: create a virtual device (e.g. "android-36;google_apis;x86_64")
+emulator -avd LearningJapaneseTest -no-snapshot -no-accel   # start it
+npm run android:install                                     # build + install + launch
+```
+
+The debug APK opens Chrome's remote-debugging port (WebView). From there,
+`adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` (the pid is
+found via `adb shell "cat /proc/net/unix | grep webview_devtools_remote"`) and
+open `http://127.0.0.1:9222` in a desktop Chrome.
+
+**Known limitation (WebView < 140):** Android devices whose WebView is older
+than Chromium 140 get the system bars drawn as native padding rather than
+letting the web page own the corners (Capacitor's built-in fallback). The app
+still clears the status/navigation bars correctly, but in **dark mode** a light
+sliver may show above the top bar on those older WebViews. Devices with an
+up-to-date WebView (≥ 140) render edge-to-edge and are unaffected.
+
 ## Features
 
 - **Quiz** — Automatic (chooses characters based on your progress, adds more as
@@ -75,6 +131,9 @@ main.js            Electron main process (splash + main window)
 setup.ps1          first-run installer (Node.js + Electron)
 start.bat          Windows launcher — auto-installs Node.js + Electron on first run
 Learning Japanese.vbs  Windows double-click launcher (no console window), same auto-setup
+capacitor.config.json  Android build settings (wraps the same src/ folder)
+android/           native Android project (Capacitor/Gradle)
+make-android-icons.ps1  regenerates Android launcher icons from icon.png
 ```
 
 Offline educational tool for personal kana practice.
