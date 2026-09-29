@@ -232,6 +232,7 @@ h2 { font-size: 17px; margin: 0 0 10px; }
 .kana-cell:hover { border-color: var(--primary); }
 .kana-cell .k { font-size: 30px; font-family: var(--font-jp); font-weight: 700; line-height: 1.1; }
 .kana-cell .r { font-size: 13px; color: var(--muted); margin-top: 4px; word-break: break-word; line-height: 1.15; }
+.kana-cell .en { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.2; word-break: break-word; }
 .detail-readings { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 6px 0; }
 .detail-chip { font-size: 14px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); font-family: var(--font-jp); }
 .detail-chip.on { color: var(--on-color, #0a5c8a); }
