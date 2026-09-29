@@ -228,13 +228,14 @@ h2 { font-size: 17px; margin: 0 0 10px; }
 /* ---------- chart ---------- */
 .chart-tabs { margin-bottom: 18px; }
 .kana-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
-.kana-cell {
-  border: 1px solid var(--border); border-radius: 10px; padding: 10px 6px 8px;
-  text-align: center; cursor: pointer; background: var(--panel);
-}
+.kana-cell { border: 1px solid var(--border); border-radius: 10px; padding: 10px 6px 8px; text-align: center; cursor: pointer; background: var(--panel); min-width: 0; }
 .kana-cell:hover { border-color: var(--primary); }
 .kana-cell .k { font-size: 30px; font-family: var(--font-jp); font-weight: 700; line-height: 1.1; }
-.kana-cell .r { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.kana-cell .r { font-size: 13px; color: var(--muted); margin-top: 4px; word-break: break-word; line-height: 1.15; }
+.detail-readings { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 6px 0; }
+.detail-chip { font-size: 14px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); font-family: var(--font-jp); }
+.detail-chip.on { color: var(--on-color, #0a5c8a); }
+.detail-chip.kun { color: var(--kun-color, #8a4b0a); }
 .detail-card { display: flex; align-items: center; gap: 26px; }
 .detail-char { font-size: 84px; font-family: var(--font-jp); font-weight: 700; line-height: 1.1; min-width: 120px; text-align: center; }
 .detail-info { flex: 1; }

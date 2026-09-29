@@ -6,6 +6,7 @@
    ============================================================ */
 
 const { KANA, allCharacters, totalCount } = window.KanaData;
+if (window.KanjiData) KANA.kanji = window.KanjiData.KANA_SCRIPT;   // 'kanji' script, KANA-compatible
 
 const LS_KEYS = {
   settings: 'kana_settings_v1',
@@ -40,14 +41,17 @@ function orderedScriptChars(script) {
 function buildStages() {
   const stages = [];
   let id = 1;
-  // Hiragana first, then Katakana: 1–10, 11–20, 21–30, … on and on
-  for (const script of ['hiragana', 'katakana']) {
-    const base = script === 'hiragana' ? 'Hiragana' : 'Katakana';
+  // Hiragana first, then Katakana: 1–10, 11–20, 21–30, … on and on;
+  // kanji come last in common-frequency buckets of 100 (1–100, 101–200, …).
+  const sizeOf = { hiragana: 10, katakana: 10, kanji: 100 };
+  const baseOf = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
+  for (const script of ['hiragana', 'katakana', 'kanji']) {
     const chars = orderedScriptChars(script);
-    for (let i = 0; i < chars.length; i += 10) {
+    const step = sizeOf[script] || 10;
+    for (let i = 0; i < chars.length; i += step) {
       const start = i + 1;
-      const end = Math.min(chars.length, i + 10);
-      stages.push({ id: id++, label: `${base} ${start}–${end}`, name: `${base} · characters ${start}–${end}`, script, chars: chars.slice(i, i + 10) });
+      const end = Math.min(chars.length, i + step);
+      stages.push({ id: id++, label: `${baseOf[script]} ${start}–${end}`, name: `${baseOf[script]} · characters ${start}–${end}`, script, chars: chars.slice(i, i + step) });
     }
   }
   return stages;
@@ -64,7 +68,7 @@ const state = {
   custom: loadOrDefault(LS_KEYS.custom, []),
   quiz: loadOrDefault(LS_KEYS.quiz, {
     mode: 'auto',
-    scripts: { hiragana: true, katakana: true },
+    scripts: { hiragana: true, katakana: true, kanji: true },
     groups: [],            // manual selection, group keys (legacy whole-script)
     rows: [],              // manual selection, fine-grained rows "script|group|rowIdx"
     customGroups: [],      // indices into state.custom
@@ -207,12 +211,12 @@ function renderHome() {
 
   /* script panels */
   const selCard = el('div', 'card');
-  selCard.append(el('h2', '', 'Select kana'));
+  selCard.append(el('h2', '', 'Select characters'));
 
-  for (const [script, label] of [['hiragana', 'Hiragana'], ['katakana', 'Katakana']]) {
+  for (const [script, label] of [['hiragana', 'Hiragana'], ['katakana', 'Katakana'], ['kanji', 'Kanji']]) {
     const m = masteryFor(script);
     const panel = el('div', 'script-panel');
-    const jp = el('span', 'jp-name', label === 'Hiragana' ? 'ひらがな' : 'カタカナ');
+    const jp = el('span', 'jp-name', label === 'Hiragana' ? 'ひらがな' : label === 'Katakana' ? 'カタカナ' : '漢字');
     const pct = el('span', 'pct', m.pct + '%');
     const bar = el('div', 'progress');
     const fill = el('div');
@@ -242,6 +246,20 @@ function renderHome() {
     if (state.quiz.mode === 'manual') {
       const picker = el('div', 'row-picker');
       KANA[script].groups.forEach(g => {
+        if (script === 'kanji') {
+          const keys = g.rows.map((_, ri) => script + '|' + g.key + '|' + ri);
+          const on = keys.some(k => state.quiz.rows.includes(k));
+          const chip = el('span', 'stage-chip' + (on ? ' selected' : ''), g.name.replace(/^Common\s*/, ''));
+          chip.title = g.name + ' · ' + g.rows.flat()[0].k + ' … ' + g.rows.flat()[g.rows.flat().length - 1].k;
+          chip.addEventListener('click', () => {
+            const allOn = keys.every(k => state.quiz.rows.includes(k));
+            state.quiz.rows = state.quiz.rows.filter(k => !k.startsWith(script + '|' + g.key + '|'));
+            if (!allOn) state.quiz.rows.push(...keys);
+            saveQuiz(); renderHome();
+          });
+          picker.append(chip);
+          return;
+        }
         picker.append(el('span', 'group-label', g.name));
         g.rows.forEach((row, ri) => {
           const key = script + '|' + g.key + '|' + ri;
@@ -533,7 +551,10 @@ function renderQuiz() {
 
   const q = s.questions[s.index];
   const card = el('div', 'quiz-card');
-  const qn = el('div', 'prompt-label', q.showRomaji ? 'Choose the kana for' : 'What is this kana?');
+  const isKanji = q.char.script === 'kanji';
+  const qn = el('div', 'prompt-label', q.showRomaji
+    ? (isKanji ? 'Choose the kanji for' : 'Choose the kana for')
+    : (isKanji ? 'What reading is this?' : 'What is this kana?'));
   /* speech follows the QUIZ DIRECTION, so it only ever talks when the kana is
      shown as part of the reading→kana quiz (kana = answer → pronouncing it is
      the point of that question). On the kana→reading quiz the kana is the
@@ -688,20 +709,22 @@ function finishQuiz() {
 function renderChart(initialScript) {
   const root = h();
   root.innerHTML = '';
-  root.append(el('h1', '', 'Kana chart'));
-  root.append(el('p', 'sub', 'Select a character from the kana table to hear its pronunciation and view stroke order.'));
+  const isKanji = initialScript === 'kanji';
+  root.append(el('h1', '', isKanji ? 'Kanji chart' : 'Kana chart'));
+  root.append(el('p', 'sub', isKanji
+    ? 'The 2000 most common kanji, top to bottom by frequency. Tap a character to see readings, meaning and stroke order.'
+    : 'Select a character from the kana table to hear its pronunciation and view stroke order.'));
 
   const tabs = el('div', 'tabs chart-tabs');
-  const scripts = ['hiragana', 'katakana'];
+  const scripts = ['hiragana', 'katakana', 'kanji'];
   scripts.forEach((sc, i) => {
-    const t = el('button', 'tab' + (i === (initialScript === 'katakana' ? 1 : 0) ? ' active' : ''), KANA[sc].name);
-    if (i === 0) t.classList.toggle('active', initialScript !== 'katakana');
+    const t = el('button', 'tab' + (sc === (initialScript || 'hiragana') ? ' active' : ''), KANA[sc].name);
     t.addEventListener('click', () => renderChart(sc));
     tabs.append(t);
   });
   root.append(tabs);
 
-  const active = initialScript === 'katakana' ? 'katakana' : 'hiragana';
+  const active = ['hiragana', 'katakana', 'kanji'].includes(initialScript) ? initialScript : 'hiragana';
   state.chartScript = active;
   for (const g of KANA[active].groups) {
     const group = el('div', 'chart-group');
@@ -711,6 +734,7 @@ function renderChart(initialScript) {
       for (const c of row) {
         const cell = el('div', 'kana-cell');
         cell.append(el('div', 'k', c.k));
+        if (isKanji) cell.classList.add('kanji');
         cell.append(el('div', 'r', c.r));
         cell.addEventListener('click', () => showDetail(c, active));
         r.append(cell);
@@ -720,20 +744,22 @@ function renderChart(initialScript) {
     root.append(group);
   }
 
-  const special = el('div', 'card');
-  special.append(el('h2', '', 'Special characters'));
-  const list = el('div', 'special-list');
-  [
-    ['ー', '「ー」 stretches the vowel before it. Type the vowel twice, for example コーヒー is typed "koohii".'],
-    ['っ/ッ', '「っ / ッ」 doubles the next consonant. Type that consonant twice, for example がっこう is typed "gakkou", カップ is "kappu".']
-  ].forEach(([k, txt]) => {
-    const item = el('div', 'special-item');
-    item.append(el('span', 'k', k));
-    item.append(el('span', 'muted tiny', txt));
-    list.append(item);
-  });
-  special.append(list);
-  root.append(special);
+  if (!isKanji) {
+    const special = el('div', 'card');
+    special.append(el('h2', '', 'Special characters'));
+    const list = el('div', 'special-list');
+    [
+      ['ー', '「ー」 stretches the vowel before it. Type the vowel twice, for example コーヒー is typed "koohii".'],
+      ['っ/ッ', '「っ / ッ」 doubles the next consonant. Type that consonant twice, for example がっこう is typed "gakkou", カップ is "kappu".']
+    ].forEach(([k, txt]) => {
+      const item = el('div', 'special-item');
+      item.append(el('span', 'k', k));
+      item.append(el('span', 'muted tiny', txt));
+      list.append(item);
+    });
+    special.append(list);
+    root.append(special);
+  }
 }
 
 function showDetail(c, script) {
@@ -865,7 +891,23 @@ function showDetail(c, script) {
   })();
 
   const meta = el('div', 'detail-meta');
-  meta.append(el('h1', '', c.r));
+  const kanji = (script === 'kanji' && window.KanjiData) ? window.KanjiData.BY_CHAR[c.k] : null;
+  if (kanji) {
+    meta.append(el('h1', '', kanji.r || c.r));
+    const chips = el('div', 'detail-readings');
+    const add = (label, arr, cls) => {
+      if (!arr || !arr.length) return;
+      chips.append(el('span', 'muted tiny', label + ' '));
+      arr.forEach(x => chips.append(el('span', 'detail-chip ' + cls, x)));
+    };
+    add('On', kanji.on, 'on');
+    add('Kun', kanji.kun, 'kun');
+    if (chips.children.length) meta.append(chips);
+    if (kanji.m) meta.append(el('p', 'muted tiny', kanji.m));
+    if (kanji.st) meta.append(el('p', 'muted tiny', Math.round(kanji.st) + ' strokes'));
+  } else {
+    meta.append(el('h1', '', c.r));
+  }
   meta.append(el('p', 'muted tiny', 'Study the character, then write it in the box below.'));
   pop.append(meta);
 

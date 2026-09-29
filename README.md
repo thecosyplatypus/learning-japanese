@@ -135,13 +135,28 @@ up-to-date WebView (≥ 140) render edge-to-edge and are unaffected.
 ## Features
 
 - **Quiz** — Automatic (chooses characters based on your progress, adds more as
-  you advance) and Manual (pick scripts/groups yourself).
+  you advance) and Manual (pick scripts/groups yourself). Hiragana, Katakana
+  and the 2000 most common kanji.
 - **Kana chart** — complete Hiragana, Katakana, yōon and extended katakana
   tables; tap a character for the reading + pronunciation (bundled offline
   audio clips, no install steps).
+- **Kanji chart** — the 2000 most common kanji by frequency, in 20 buckets of
+  100. Tap a kanji for on/kun readings, English meaning and stroke count, and
+  drill readings both directions in quizzes.
 - **Statistics** — per-character accuracy history kept on this device.
 - **Settings** — theme (light/dark), accent color, Japanese font, session
   length, quiz direction. All data lives locally; nothing is uploaded anywhere.
+
+## Data & attribution
+
+The kanji list, readings, meanings and metadata come from **KANJIDIC2**
+(© Electronic Dictionary Research and Development Group, EDRDG)
+<https://www.edrdg.org/kanjidic/kanjidic2.html>, licensed under
+Creative Commons Attribution-ShareAlike 4.0
+(<https://creativecommons.org/licenses/by-sa/4.0/>). The 2000 entries were
+selected by the KANJIDIC2 frequency value (most frequent first); the quiz
+"reading" for each kanji is its first on'yomi, or first kun'yomi if it has no
+on'yomi.
 
 ## Layout
 
@@ -150,6 +165,7 @@ src/index.html     app shell (boot splash)
 src/splash.html    launcher splash screen
 src/styles.css     styling
 src/kana-data.js   kana data
+src/kanji-data.js  2000 most common kanji (KANJIDIC2, CC BY-SA 4.0)
 src/stroke-paths.js  stroke order data
 src/audio/         bundled pronunciation clips (one WAV per kana)
 src/audio-map.js   kana → clip filename map

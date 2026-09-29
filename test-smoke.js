@@ -22,6 +22,27 @@ app.whenReady().then(async () => {
       const homeH1 = c.querySelector('h1') ? c.querySelector('h1').textContent : null;
       q('chart').click();
       const chartOk = !!document.querySelector('.kana-cell');
+      const kanjiTab = [...document.querySelectorAll('.chart-tabs .tab')].find(t => t.textContent.trim() === 'Kanji');
+      let kanji = null;
+      if (kanjiTab) {
+        kanjiTab.click();
+        const cells = document.querySelectorAll('.kana-cell');
+        const first = document.querySelector('.kana-cell');
+        let detail = null;
+        if (first) {
+          first.click();
+          const pop = document.querySelector('.detail-popup');
+          detail = pop ? {
+            hasStage: !!pop.querySelector('.detail-stage'),
+            onChips: [...pop.querySelectorAll('.detail-chip.on')].map(x => x.textContent),
+            kunChips: [...pop.querySelectorAll('.detail-chip.kun')].map(x => x.textContent),
+            meaning: pop.querySelector('.detail-meta p') ? pop.querySelector('.detail-meta p').textContent : null
+          } : null;
+          const closeBtn = [...pop.querySelectorAll('button')].find(b => b.textContent.trim() === 'Close');
+          if (closeBtn) closeBtn.click();
+        }
+        kanji = { cells: cells.length, first: first ? first.querySelector('.k').textContent : null, detail };
+      }
       q('home').click();
       const startBtn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Start');
       let quizOk = false;
@@ -30,7 +51,7 @@ app.whenReady().then(async () => {
       const statsOk = !!document.querySelector('.stat-grid');
       q('settings').click();
       const settingsOk = !!document.querySelector('.accent-dot');
-      return { homeH1, chartOk, quizOk, statsOk, settingsOk, bootRemoved: !document.getElementById('boot') };
+      return { homeH1, chartOk, kanji, quizOk, statsOk, settingsOk, bootRemoved: !document.getElementById('boot') };
     })()`);
     console.log('SMOKE RESULT:', JSON.stringify(result));
   } catch (err) {
