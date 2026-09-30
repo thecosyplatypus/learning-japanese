@@ -1,7 +1,7 @@
 # Play Store listing — Learning Japanese
 
 Everything below is paste-ready for the Play Console. Content is accurate for
-v0.7.4 (versionCode 11), which ships with no ads, no accounts, and no network.
+v0.7.5 (versionCode 12), which ships with no ads, no accounts, and no network.
 
 ## App details
 
@@ -104,20 +104,19 @@ purposes, no retention periods and no third-party SDK declarations. There is no
 - Shares location: No
 - Available in other languages: No (English UI)
 
-## Release notes — v0.7.4 (400 char limit)
+## Release notes — v0.7.5 (400 char limit)
 
 ```
-Back button now behaves properly throughout the app: it closes dialogs first,
-then moves between screens, and only exits from the home screen.
-Kanji and their readings are now centred in their chart tiles.
-Tablet and foldable layouts scale properly, including rotation and split-screen.
-Removed the unused internet permission. Smaller download, fully offline.
+Pronunciations now play immediately and at a consistent volume. Audio playback
+was rebuilt to be instant, syllables in a reading now run together naturally,
+and every clip is level-matched so no character is quieter than another.
+The app is also much smaller to download and takes less space.
 ```
 
 ## Upload checklist
 
 - [x] AAB signed with the release key (v2 scheme; DN `CN=thecosyplatypus, OU=Learning Japanese`)
-- [x] `versionCode 11` / `versionName 0.7.4`
+- [x] `versionCode 12` / `versionName 0.7.5`
 - [x] `compileSdk 36` / `targetSdk 36` / `minSdk 24`
 - [x] No permissions declared (verified in the merged AAB manifest)
 - [x] `webContentsDebuggingEnabled` off in the release build

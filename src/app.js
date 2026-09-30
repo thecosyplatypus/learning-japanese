@@ -209,6 +209,9 @@ function navigate(route, extra, fromPop) {
   document.querySelectorAll('.nav-item').forEach(a => {
     a.classList.toggle('active', a.dataset.route === route);
   });
+  /* cut any clip still sounding, so a reading never carries over into the
+     screen the user just moved to */
+  stopAudio();
   routes[route](extra);
   content.scrollTop = 0;
   if (fromPop) return;
@@ -1238,57 +1241,134 @@ function fitGlyphFont(canvasWidth, text, ratio) {
   return Math.floor((canvasWidth * 0.92) / n);  // multi-kana: shrink so the whole word fits
 }
 
-let _audio = null;
+/* ---------- audio ----------
+   Clips play through Web Audio rather than an <audio> element. Measured on the
+   release build, every way of using an <audio> element - fresh object, reused
+   object, preloaded - cost about a second of output setup before a 0.2 s clip
+   was audible, which is what made the app sound slow: speakChain() advanced on
+   'ended', so each syllable in a reading paid that cost again.
 
-/* Play a multi-kana string (e.g. a kanji reading "ニチ") by chaining the
-   bundled per-kana clips, longest match first so digraphs (キョ) stay intact.
-   Returns false when no clips matched (silent marks like ー/っ are skipped). */
-function speakChain(text) {
-  if (typeof AudioMap === 'undefined' || !text) return false;
+   Decoding into an AudioBuffer and starting a BufferSource instead drops the
+   same clip to roughly its own length, and a whole reading can be scheduled
+   sample-accurately so consecutive syllables butt up against each other the way
+   a spoken word does. Decoded clips are cached, so a character is instant the
+   second time it is heard.
+
+   Stopping is a single stopAudio() call, which the old chained 'ended' loop
+   could not do: it left a clip playing when the user navigated away. */
+const _clipCache = new Map();     // file -> AudioBuffer
+const _clipLoading = new Map();   // file -> Promise, so two taps share one fetch
+let _actx = null;
+let _voices = [];                 // BufferSources still playing
+let _element = null;              // <audio> fallback, used only if Web Audio fails
+
+function audioContext() {
+  if (_actx) return _actx;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return null;
+  try { _actx = new Ctor(); } catch { _actx = null; }
+  return _actx;
+}
+
+function decodeClip(file) {
+  const cached = _clipCache.get(file);
+  if (cached) return Promise.resolve(cached);
+  const loading = _clipLoading.get(file);
+  if (loading) return loading;
+  const ctx = audioContext();
+  if (!ctx) return Promise.reject(new Error('Web Audio unavailable'));
+  const p = fetch('audio/' + file)
+    .then(r => r.arrayBuffer())
+    .then(ab => ctx.decodeAudioData(ab))       // promise form; widely supported
+    .then(buf => { _clipCache.set(file, buf); _clipLoading.delete(file); return buf; })
+    .catch(err => { _clipLoading.delete(file); throw err; });
+  _clipLoading.set(file, p);
+  return p;
+}
+
+function stopAudio() {
+  for (const s of _voices) { try { s.onended = null; s.stop(); } catch { /* already ended */ } }
+  _voices = [];
+  if (_element) { try { _element.pause(); } catch { /* ignore */ } _element = null; }
+}
+
+/* Play a list of clip files as one continuous utterance. Falls back to an
+   <audio> element, and reports false if even that is unavailable. */
+function playClips(files) {
+  if (!files.length) return Promise.resolve(false);
+  const ctx = audioContext();
+  if (!ctx) return playClipsWithElement(files);
+  const ready = ctx.state === 'suspended' ? ctx.resume().catch(() => {}) : Promise.resolve();
+  return ready
+    .then(() => Promise.all(files.map(decodeClip)))
+    .then(bufs => {
+      stopAudio();
+      /* start a beat in the future so every source can be placed on the same
+         timeline, then hand off end to end with no silence between syllables */
+      let t = ctx.currentTime + 0.03;
+      for (const buf of bufs) {
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(t);
+        t += buf.duration;
+        _voices.push(src);
+        /* drop finished sources so a long session doesn't hold every clip it
+           has ever played; stopAudio() clears onended first, so it stays quiet
+           there and the splice below never runs during a stop */
+        src.onended = () => { const i = _voices.indexOf(src); if (i >= 0) _voices.splice(i, 1); };
+      }
+      return true;
+    })
+    .catch(() => playClipsWithElement(files));
+}
+
+function playClipsWithElement(files) {
+  try {
+    stopAudio();
+    let i = 0;
+    const next = () => {
+      if (i >= files.length) { _element = null; return; }
+      _element = new Audio('audio/' + files[i++]);
+      _element.volume = 1;
+      _element.onended = next;
+      const p = _element.play();
+      if (p && p.catch) p.catch(() => { _element = null; });
+    };
+    next();
+    return Promise.resolve(true);
+  } catch { return Promise.resolve(false); }
+}
+
+/* Resolve a kana string to clip files, longest match first so digraphs (キョ)
+   stay intact. Silent marks like ー and っ simply match nothing and are
+   skipped, which is why this can return an empty list. */
+function clipsFor(text) {
+  if (typeof AudioMap === 'undefined' || !text) return [];
+  const exact = AudioMap[text];
+  if (exact) return [exact];
   const keys = Object.keys(AudioMap).sort((a, b) => b.length - a.length);
   const files = [];
   for (let i = 0; i < text.length;) {
     const hit = keys.find(k => text.startsWith(k, i));
     if (hit) { files.push(AudioMap[hit]); i += hit.length; } else i++;
   }
-  if (!files.length) return false;
-  if (_audio) { _audio.pause(); _audio.onended = null; _audio = null; }
-  let idx = 0;
-  const next = () => {
-    if (idx >= files.length) { _audio = null; return; }
-    _audio = new Audio('audio/' + files[idx++]);
-    _audio.volume = 1;
-    _audio.onended = () => next();
-    const p = _audio.play();
-    if (p && p.catch) p.catch(() => { next(); });
-  };
-  next();
-  return true;
+  return files;
 }
 
 function speakChar(text) {
   // 1) prefer the bundled pronunciation clips (fully offline, no OS voice needed)
-  const file = (typeof AudioMap !== 'undefined') ? AudioMap[text] : null;
-  if (file || (typeof AudioMap !== 'undefined' && speakChain(text))) {
-    if (file) {
-      try {
-        if (_audio) { _audio.pause(); _audio = null; }
-        _audio = new Audio('audio/' + file);
-        _audio.volume = 1;
-        const p = _audio.play();
-        if (p && p.catch) p.catch(() => {});
-        return;
-      } catch { /* fall through to OS speech */ }
-    }
-    return;
-  }
-  // 2) fallback: OS text-to-speech (only used when a clip isn't bundled)
+  const files = clipsFor(text);
+  if (files.length) { playClips(files); return; }
+  // 2) fallback: OS text-to-speech (only used when no clip matches)
   try {
     if (!('speechSynthesis' in window)) { toast('Speech not available on this device'); return; }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ja-JP';
-    u.rate = 0.9;
+    // 1.0 is the normal rate. 0.9 stretched every mora, so the fallback read
+    // noticeably slower than the bundled clips.
+    u.rate = 1.0;
     // Prefer a Japanese voice, but don't give up when the voice list isn't
     // populated yet — the engine picks a suitable voice for the lang tag.
     const all = speechSynthesis.getVoices();
@@ -1298,6 +1378,57 @@ function speakChar(text) {
     speechSynthesis.speak(u);
   } catch { toast('Speech not available'); }
 }
+
+/* Decoding a clip on demand costs ~250 ms, and building the AudioContext costs
+   more, so the very first character a user taps still waited about a second -
+   exactly the lag the app was blamed for. All 229 clips together are only
+   1.5 MB, so they are decoded up front instead.
+
+   This starts at boot, not on the first tap, because decoding does not need a
+   running context: the context is created suspended, the clips are decoded into
+   it during idle time, and the first tap then only has to resume it, which a
+   tap is always allowed to do. Waiting for a gesture to start the prewarm left
+   the first tap paying the whole cost. */
+let _prewarmed = false;
+const PREWARM_BATCH = 8;
+function prewarmClips() {
+  if (_prewarmed) return;
+  _prewarmed = true;
+  /* this now runs while the page is booting, so a missing AudioMap must not
+     throw here and take the rest of the app down with it */
+  if (typeof AudioMap === 'undefined') return;
+  const files = Array.from(new Set(Object.values(AudioMap)));
+  audioContext();          // build it now, while suspended, so it is ready
+  /* A fixed batch per slot, with an index that advances, so the work is bounded
+     and always terminates. Trusting the idle deadline alone is not safe: a
+     fallback that reports a constant budget would start all 229 decodes at once
+     and stall the first frame. */
+  const schedule = window.requestIdleCallback
+    ? fn => window.requestIdleCallback(fn, { timeout: 1000 })
+    : fn => setTimeout(fn, 120);
+  let i = 0;
+  const step = () => {
+    for (let n = 0; n < PREWARM_BATCH && i < files.length; n++, i++) {
+      const f = files[i];
+      if (!_clipCache.has(f)) decodeClip(f).catch(() => {});   // a bad clip just stays uncached
+    }
+    if (i < files.length) schedule(step);
+  };
+  schedule(step);
+}
+prewarmClips();
+
+/* Android keeps an AudioContext suspended until the page is touched, so resume
+   it on the first real interaction. Every clip is triggered from a tap and
+   playClips() also resumes on demand; this just makes it immediate. */
+function unlockAudio() {
+  const ctx = audioContext();
+  if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+}
+['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+  window.addEventListener(ev, unlockAudio, { once: true, passive: true })
+);
+
 if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
 
 /* ============================================================
