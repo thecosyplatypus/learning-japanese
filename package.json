@@ -1,6 +1,6 @@
 {
   "name": "learning-japanese",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "Offline study app for Japanese hiragana, katakana and kanji",
   "main": "main.js",
   "scripts": {
