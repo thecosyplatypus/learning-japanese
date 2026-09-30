@@ -7,10 +7,17 @@ and all your progress stays on this device.
 
 ## Run it
 
-Double-click `Learning Japanese.vbs` (recommended, no console window) or
-`start.bat`. **The first launch installs everything it needs** — Node.js and
-the Electron runtime — automatically, then opens the app. No Japanese voice,
-language pack, or anything else needs installing.
+**Windows** — double-click `Learning Japanese.vbs` (recommended, no console
+window) or `start.bat`.
+
+**Linux** — double-click `start.sh` (or run `./start.sh` from a terminal). If the
+file is not marked executable — which happens when the folder is copied as a zip
+instead of cloned — run `chmod +x start.sh setup.sh` once, or just
+`bash start.sh`.
+
+**The first launch installs everything it needs** — Node.js and the Electron
+runtime — automatically, then opens the app. No Japanese voice, language pack, or
+anything else needs installing.
 
 That's it. After the one-time setup the app runs fully offline.
 
@@ -19,6 +26,10 @@ That's it. After the one-time setup the app runs fully offline.
 - **Windows, macOS, or Linux**
 - **Internet connection** — needed once, for the automatic first-run setup.
   The app itself runs fully offline afterwards.
+
+On Linux the first-run setup downloads Node.js itself (x64 or arm64, matching the
+machine) and uses `curl` or `wget` plus `tar` to unpack it — all of which are
+already present on normal desktop distributions.
 
 ## Terminal use (optional)
 
@@ -173,8 +184,10 @@ src/audio/         bundled pronunciation clips (one WAV per kana)
 src/audio-map.js   kana → clip filename map
 src/app.js         quiz engine, chart, statistics, settings
 main.js            Electron main process (splash + main window)
-setup.ps1          first-run installer (Node.js + Electron)
+setup.ps1          first-run installer for Windows (Node.js + Electron)
+setup.sh           first-run installer for Linux (Node.js + Electron)
 start.bat          Windows launcher — auto-installs Node.js + Electron on first run
+start.sh           Linux launcher — auto-installs Node.js + Electron on first run
 Learning Japanese.vbs  Windows double-click launcher (no console window), same auto-setup
 capacitor.config.json  Android build settings (wraps the same src/ folder)
 android/           native Android project (Capacitor/Gradle)
