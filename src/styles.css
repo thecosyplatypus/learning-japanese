@@ -1,5 +1,5 @@
 :root {
-  --primary: #d9534f;
+  --primary: var(--primary);
   --bg: #f8f7f5;
   --panel: #ffffff;
   --text: #1f2937;
@@ -31,6 +31,8 @@ html[data-theme="dark"] {
 html[data-accent="green"] { --primary: #2b8a5a; }
 html[data-accent="amber"] { --primary: #d68b1f; }
 html[data-accent="blue"]  { --primary: #5b6ad9; }
+html[data-accent="red"] { --primary: #d9534f; }
+html[data-accent="white"] { --primary: #ffffff; }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -74,7 +76,7 @@ body.booting .boot { display: flex; }
 .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); }
 .brand-mark {
   width: 40px; height: 30px; border-radius: 8px;
-  background: #d9534f; color: #fff;
+  background: var(--primary); color: #fff;
   display: grid; place-items: center; font-weight: 700; font-size: 13px;
   letter-spacing: .02em;
   font-family: var(--font-jp);
@@ -306,6 +308,11 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
 .toast[hidden] { display: none; }
 @keyframes fadeup { from { opacity: 0; transform: translate(-50%, 8px); } }
 
+/* One row of the chart. On a phone the width is the binding constraint, so keep
+   auto-fill and let long rows (kanji carries 10 cells) wrap onto several lines
+   rather than squeeze every cell down to an unreadable stub. The wide-screen
+   override further down gives each row exactly the columns it has and centres
+   it, which is the layout we actually want on a PC. */
 .chart-grid-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-bottom: 10px; justify-items: stretch; }
 .chart-group { margin-bottom: 22px; }
 .chart-group h3 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; position: sticky; top: 0; z-index: 2; background: var(--bg, #fff); padding: 6px 0 4px; text-align: center; }
@@ -404,6 +411,25 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
   .prompt-char { font-size: 96px; }
 }
 
+/* Chart rows centre themselves once the column is wide enough to hold a whole
+   row at full size. The widest row is kanji, 10 cells, which needs
+   10 * 72px + 9 * 8px gap = 792px, so that is the threshold. Note this is the
+   content box (.content has 34px padding a side), which is what container-type:
+   inline-size actually measures.
+   --cols is set per row by renderChart, so each row gets exactly as many columns
+   as it has cells instead of auto-filling the width and leaving short rows
+   ragged. max-width caps the cell size so cells don't stretch on a wide monitor,
+   and margin-inline centres the block under the group heading. Narrower than
+   this, the base auto-fill rule applies and long rows wrap onto several lines
+   rather than being squeezed to unreadable stubs. */
+@container (min-width: 792px) {
+  .chart-grid-row {
+    grid-template-columns: repeat(var(--cols, 5), minmax(72px, 1fr));
+    max-width: calc(var(--cols, 5) * 104px + (var(--cols, 5) - 1) * 8px);
+    margin-inline: auto;
+  }
+}
+
 /* Cap line length so prose and settings rows stay readable instead of
    stretching edge to edge. Grids (.stat-grid, .kana-grid) are deliberately
    left uncapped - they use extra width productively. */
@@ -416,3 +442,7 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
   .script-panel,
   .draw-guide { max-width: 1080px; margin-inline: auto; }
 }
+
+
+html[data-accent="white"] .brand-mark { background: #ffffff; color: #000000; }
+

@@ -860,6 +860,11 @@ function renderChart(initialScript) {
     group.append(el('h3', '', g.name));
     for (const row of g.rows) {
       const r = el('div', 'chart-grid-row');
+      /* Rows hold a fixed number of cells (kana 3-5, kanji always 10). Telling
+         the row how many it actually has lets the stylesheet give it exactly
+         that many columns and centre the block, instead of auto-filling tracks
+         across the whole width and leaving short rows ragged. */
+      r.style.setProperty('--cols', row.length);
       for (const c of row) {
         const cell = el('div', 'kana-cell');
         cell.append(el('div', 'k', c.k));
@@ -995,7 +1000,7 @@ function showDetail(c, script) {
     const ctx = draw.getContext('2d', { willReadFrequently: true });
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.lineWidth = penSize;
-    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#d9534f';
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary').trim() || 'currentColor';
     let ink = false;
     const pos = (e) => {
       const r = draw.getBoundingClientRect();
@@ -1068,8 +1073,26 @@ function showDetail(c, script) {
   pop.append(bar);
 
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDetail(); });
-  document.addEventListener('keydown', onEsc, { once: true });
-  function onEsc(e) { if (e.key === 'Escape') closeDetail(); }
+  /* Escape closes; Left/Right step to the previous/next character, the same way
+     the on-screen chevrons and the head arrow do, so the keyboard and the mouse
+     agree on what "next" means. Registered without { once: true } on purpose:
+     that option unbinds after the FIRST key of any kind, so a single arrow
+     press used to leave Escape dead for the rest of the popup's life.
+     closeDetail() removes this listener, so it only lives as long as the popup. */
+  document.addEventListener('keydown', onDetailKey);
+  function onDetailKey(e) {
+    /* never steal keys from a field the user is typing in */
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.key === 'Escape') { closeDetail(); return; }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (nextList.length < 2) return;
+    e.preventDefault();          /* don't also scroll the chart behind us */
+    const step = e.key === 'ArrowRight' ? 1 : nextList.length - 1;
+    const target = nextList[(nextId + step) % nextList.length];
+    closeDetail();
+    showDetail(target, script);
+  }
   overlay.append(pop);
   root.append(overlay);
 
@@ -1077,7 +1100,7 @@ function showDetail(c, script) {
 
 function closeDetail() {
   overlay.remove();
-  document.removeEventListener('keydown', onEsc);
+  document.removeEventListener('keydown', onDetailKey);
   document.body.classList.remove('modal-open');
   /* opening the detail wiped #content, so bring the chart back — and keep our place */
   const keep = state._detailScroll || 0;
@@ -1125,7 +1148,7 @@ function drawStrokeVectors(charText, done) {
   const W = cv.width, H = cv.height;
 
   /* stem + stroke reveal colour-scheme-aware */
-  const color = getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#d9534f';
+  const color = getComputedStyle(document.body).getPropertyValue('--primary').trim() || 'currentColor';
   const stem  = getComputedStyle(document.body).getPropertyValue('--border').trim() || 'rgba(0,0,0,.15)';
 
   ctx.clearRect(0, 0, W, H);
@@ -1206,7 +1229,7 @@ function animateWrite(charText, done) {
     return;
   }
   /* vector path rendering (筆順, stroke by stroke, via REAL STROKE_PATHS) */
-  const color = getComputedStyle(document.body).getPropertyValue('--primary').trim() || '#d9534f';
+  const color = getComputedStyle(document.body).getPropertyValue('--primary').trim() || 'currentColor';
   let si = 0, seg = 0, vt = 0, prevX = null, prevY = null;
   let start = performance.now();
   const totalSteps = vectors.reduce((n, s) => n + s.length, 0);
@@ -1305,13 +1328,13 @@ function playClips(files) {
       stopAudio();
       /* start a beat in the future so every source can be placed on the same
          timeline, then hand off end to end with no silence between syllables */
-      let t = ctx.currentTime + 0.03;
+      let t = ctx.currentTime + 0.02;
       for (const buf of bufs) {
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(ctx.destination);
         src.start(t);
-        t += buf.duration;
+        t += buf.duration + 0.02;
         _voices.push(src);
         /* drop finished sources so a long session doesn't hold every clip it
            has ever played; stopAudio() clears onended first, so it stays quiet
@@ -1577,7 +1600,7 @@ function renderSettings() {
   })));
 
   const accentWrap = el('div', 'accent-list');
-  const accents = { red: '#d9534f', green: '#2b8a5a', amber: '#d68b1f', blue: '#5b6ad9' };
+  const accents = { red: '#d9534f', white: '#ffffff', green: '#2b8a5a', amber: '#d68b1f', blue: '#5b6ad9' };
   for (const [key, color] of Object.entries(accents)) {
     const d = el('span', 'accent-dot' + (state.settings.accent === key ? ' active' : ''));
     d.style.background = color;
