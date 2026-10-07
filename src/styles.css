@@ -327,6 +327,15 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   animation: fadein .18s ease;
 }
+
+.modal-overlay.tutorial-overlay {
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: calc(20px + var(--safe-bottom, 0px));
+  background: rgba(10, 12, 16, 0.3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 @keyframes fadein { from { opacity: 0; } }
 .detail-popup {
   --popup-w: min(92vw, 460px);
@@ -373,6 +382,97 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
   border: 2px solid var(--primary); border-radius: 14px;
   box-shadow: var(--shadow); background: var(--panel);
   touch-action: none; cursor: crosshair;
+}
+
+/* ---------- Draw test ---------- */
+.draw-test-card {
+  padding: 12px;
+}
+
+.draw-test-target {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.draw-test-target .prompt-char {
+  font-size: 64px;
+  line-height: 1.2;
+  margin: 8px 0;
+}
+
+.draw-test-target .muted.tiny {
+  font-size: 13px;
+}
+
+.draw-score {
+  font-size: 2em;
+  font-weight: 800;
+  text-align: center;
+  margin: 12px 0 4px;
+}
+
+.draw-score.good { color: var(--good); }
+.draw-score.mid { color: var(--accent); }
+.draw-score.low { color: var(--bad); }
+
+.draw-feedback {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  min-height: 1.4em;
+  margin-bottom: 12px;
+}
+
+.draw-test-result .stars {
+  margin: 8px 0 4px;
+}
+
+.draw-score-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.draw-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 60px;
+}
+
+.draw-chip-char {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.draw-chip-score {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.draw-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.draw-session-row {
+  padding: 6px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.draw-hint {
+  color: var(--accent);
+  font-style: italic;
 }
 .detail-meta { text-align: center; margin-top: 12px; }
 .detail-meta h1 { font-size: 34px; margin: 0 0 6px; color: var(--text); }
@@ -446,3 +546,114 @@ select:focus, input:focus { outline: 2px solid color-mix(in srgb, var(--primary)
 
 html[data-accent="white"] .brand-mark { background: #ffffff; color: #000000; }
 
+
+/* ---------- tutorial ---------- */
+.tutorial-modal {
+  width: min(520px, 92vw);
+  max-height: min(90vh, 560px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  text-align: center;
+  justify-content: flex-end;
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  box-shadow: var(--shadow);
+}
+.tutorial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.tutorial-body {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow-y: auto;
+  margin-top: auto;
+}
+
+.tutorial-content {
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  width: 100%;
+}
+.tutorial-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+.tutorial-text {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+  text-align: center;
+  line-height: 1.7;
+}
+.tutorial-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.tutorial-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.tutorial-dot.active {
+  background: var(--primary);
+}
+.tutorial-nav {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px 16px;
+  gap: 10px;
+  justify-content: space-between;
+}
+/* ---------- tutorial guided tour ---------- */
+.tutorial-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 980;
+  pointer-events: none;
+}
+.tutorial-highlight {
+  position: relative;
+  z-index: 990;
+  outline: 3px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+.tutorial-tooltip {
+  position: fixed;
+  z-index: 995;
+  max-width: min(340px, 92vw);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  line-height: 1.7;
+  font-size: 14px;
+  bottom: calc(20px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}

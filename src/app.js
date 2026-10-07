@@ -54,7 +54,9 @@ const LS_KEYS = {
   settings: 'kana_settings_v1',
   stats: 'kana_stats_v1',
   custom: 'kana_custom_v1',
-  quiz: 'kana_quiz_v1'
+  quiz: 'kana_quiz_v1',
+  tutorial: 'kana_tutorial_v1',
+  draw: 'kana_draw_v1'
 };
 
 const DEFAULT_SETTINGS = {
@@ -119,8 +121,20 @@ const state = {
     customMode: false
   }),
   route: 'home',
-  quizSession: null
+  quizSession: null,
+  drawSession: null
 };
+
+/* Drawing test keeps its OWN character selection so practising your drawing
+   never moves the quiz's picks (and vice versa). Same shape as state.quiz so
+   the picker below can be written once and read the same way. */
+state.draw = loadOrDefault(LS_KEYS.draw, {
+  mode: 'auto',
+  stages: [1, 2],
+  chunkStart: 0
+});
+
+state.tutorial = loadOrDefault(LS_KEYS.tutorial, { seen: false });
 
 if (state.settings.direction === 'both') { state.settings.direction = 'romaji-to-kana'; saveSettings(); }
 
@@ -137,6 +151,8 @@ function saveSettings() { save(LS_KEYS.settings, state.settings); }
 function saveStats() { save(LS_KEYS.stats, state.stats); }
 function saveQuiz() { save(LS_KEYS.quiz, state.quiz); }
 function saveCustom() { save(LS_KEYS.custom, state.custom); }
+function saveTutorial() { save(LS_KEYS.tutorial, state.tutorial); }
+function saveDraw() { save(LS_KEYS.draw, state.draw); }
 
 /* ---------------- DOM helpers ---------------- */
 const content = document.getElementById('content');
@@ -162,7 +178,8 @@ const routes = {
   home: renderHome,
   stats: renderStats,
   chart: renderChart,
-  settings: renderSettings
+  settings: renderSettings,
+  tutorial: renderTutorial
 };
 
 /* ---------- session history (the Android back gesture) ----------
@@ -838,6 +855,9 @@ function finishQuiz() {
 function renderChart(initialScript) {
   const root = h();
   root.innerHTML = '';
+  /* the drawing test hangs off the chart as a fourth tab: it tests the same
+     characters the chart teaches, so it lives here rather than in the sidebar */
+  if (initialScript === 'drawtest') return renderDrawTest();
   const isKanji = initialScript === 'kanji';
   root.append(el('h1', '', isKanji ? 'Kanji chart' : 'Kana chart'));
   root.append(el('p', 'sub', isKanji
@@ -851,6 +871,9 @@ function renderChart(initialScript) {
     t.addEventListener('click', () => renderChart(sc));
     tabs.append(t);
   });
+  const drawTab = el('button', 'tab draw-test-tab', 'Draw test');
+  drawTab.addEventListener('click', () => renderChart('drawtest'));
+  tabs.append(drawTab);
   root.append(tabs);
 
   const active = ['hiragana', 'katakana', 'kanji'].includes(initialScript) ? initialScript : 'hiragana';
@@ -894,6 +917,533 @@ function renderChart(initialScript) {
     special.append(list);
     root.append(special);
   }
+}
+
+/* ============================================================
+   DRAW TEST — write a character, get a % for how close it is
+   ============================================================ */
+
+/* --- scoring helpers ---
+   Everything works on small square bitmaps so a drawing can be compared with
+   the reference glyph without caring about how big it was drawn or where on
+   the canvas it landed: both are cropped to their ink and scaled to the same
+   box first, so only the SHAPE decides the score. */
+const DRAW_GRID = 64;      // comparison bitmap is 64x64
+const DRAW_PAD = 4;         // breathing room around the cropped ink, in cells
+const DRAW_EMPTY_AT = 24;   // alpha above this counts as ink
+const DRAW_TOLERANCE = 1;   // cells of slack allowed around the drawn ink
+
+function drawMaskFromCanvas(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const w = canvas.width, h = canvas.height;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const mask = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) mask[i] = data[i * 4 + 3] > DRAW_EMPTY_AT ? 1 : 0;
+  return { mask, w, h };
+}
+
+/* Reference bitmap for a character.
+
+   The learner draws SOLID ink with the pen, so the target has to be the SOLID
+   glyph, not the hollow trace outline shown on screen. Comparing solid pen ink
+   against a hollow outline only overlaps on the two thin edges of every stroke
+   and made even a careful, accurate drawing score far too low. The on-screen
+   guide stays an outline (it is only a tracing hint); only the scoring target
+   is filled. */
+function drawReferenceMask(charText, size) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#000';
+  ctx.font = '700 ' + fitGlyphFont(size, charText, 0.8) + 'px ' + jpFontStackCss();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(charText, size / 2, size / 2 + size * 0.02);
+  const data = ctx.getImageData(0, 0, size, size).data;
+  const mask = new Uint8Array(size * size);
+  for (let i = 0; i < size * size; i++) mask[i] = data[i * 4 + 3] > DRAW_EMPTY_AT ? 1 : 0;
+  return mask;
+}
+
+/* Crop to the ink, scale the longest side into the padded box, centre it.
+   Returns the grid plus a mapper that takes a point in the original 0..100
+   stroke space and lands it on the grid, which is how stroke coverage is
+   measured against what the learner actually drew. */
+function drawNormalise(mask, w, h, grid) {
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  const out = new Uint8Array(grid * grid);
+  const empty = maxX < 0;
+  if (empty) return { grid: out, empty: true, map: null };
+
+  const bw = maxX - minX + 1, bh = maxY - minY + 1;
+  const span = grid - DRAW_PAD * 2;
+  const scale = Math.min(span / bw, span / bh);
+  const ox = (grid - bw * scale) / 2;
+  const oy = (grid - bh * scale) / 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x]) continue;
+      const nx = Math.round(ox + (x - minX) * scale);
+      const ny = Math.round(oy + (y - minY) * scale);
+      if (nx >= 0 && nx < grid && ny >= 0 && ny < grid) out[ny * grid + nx] = 1;
+    }
+  }
+  /* 0..100 stroke space -> grid cells (the reference mask lives in the same
+     0..100 space, so the same mapping applies to it) */
+  const map = (px, py) => [
+    ox + (px / 100 * w - minX) * scale,
+    oy + (py / 100 * h - minY) * scale
+  ];
+  return { grid: out, empty: false, map };
+}
+
+function drawDilate(mask, grid, r) {
+  const out = new Uint8Array(grid * grid);
+  for (let y = 0; y < grid; y++) {
+    for (let x = 0; x < grid; x++) {
+      if (!mask[y * grid + x]) continue;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < grid && ny >= 0 && ny < grid) out[ny * grid + nx] = 1;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/* Dice coefficient over the two ink grids. The learner's ink is dilated by one
+   cell first: handwriting is never pixel-exact, and a near miss that lands
+   beside the target should still count as a near miss, not a total zero. */
+function drawDice(ref, ink, grid) {
+  /* Score the drawing as precision + recall, then combine them.
+
+     recall    = target cells that the drawing covered, with a cell of slack
+     precision = drawn cells that actually landed on the target, with slack
+
+     Both matter. Precision is what stops a wild scribble from scoring well just
+     by covering a lot of the box, and recall is what stops a tiny fragment of
+     the character from scoring well. Slack is only ever granted on top of the
+     real overlap, never counted as ink of its own, so extra coverage cannot
+     inflate the result. */
+  let nRef = 0, nInk = 0, refNear = 0, inkNear = 0;
+  const fatRef = drawDilate(ref, grid, DRAW_TOLERANCE);
+  const fatInk = drawDilate(ink, grid, DRAW_TOLERANCE);
+  for (let i = 0; i < grid * grid; i++) {
+    if (ref[i]) { nRef++; if (fatInk[i]) refNear++; }
+    if (ink[i]) { nInk++; if (fatRef[i]) inkNear++; }
+  }
+  if (!nRef || !nInk) return 0;
+  const recall = refNear / nRef;
+  const precision = inkNear / nInk;
+  if (!recall || !precision) return 0;
+  return (2 * precision * recall) / (precision + recall);
+}
+
+/* How much of the real stroke path the learner covered. Catches "the right
+   blob, wrong order/parts", which pure shape matching forgives, and tells us
+   which stroke to mention in the feedback. */
+function drawStrokeCoverage(strokes, inkGrid, map, grid) {
+  if (!strokes || !strokes.length || !map) return null;
+  const ink = drawDilate(inkGrid, grid, DRAW_TOLERANCE);
+  let total = 0, hit = 0;
+  const per = [];
+  for (const st of strokes) {
+    let sTotal = 0, sHit = 0;
+    for (let i = 0; i < st.length - 1; i++) {
+      const [x1, y1] = st[i], [x2, y2] = st[i + 1];
+      const steps = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 2));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const [gx, gy] = map(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
+        const nx = Math.round(gx), ny = Math.round(gy);
+        sTotal++; total++;
+        if (nx >= 0 && nx < grid && ny >= 0 && ny < grid && ink[ny * grid + nx]) { sHit++; hit++; }
+      }
+    }
+    per.push(sTotal ? sHit / sTotal : 1);
+  }
+  if (!total) return null;
+  let weak = -1, weakVal = 2;
+  per.forEach((v, i) => { if (v < weakVal) { weakVal = v; weak = i; } });
+  return { coverage: hit / total, weakStroke: weak, weakValue: weakVal };
+}
+
+/* Percentage for one drawing.
+
+   The score is the tolerant Dice coefficient against the filled glyph, which is
+   exactly what the learner drew, so the number is a real "how alike are these
+   two shapes" figure rather than an inflated guess.
+
+   Stroke coverage is NOT part of the number: it is measured against our
+   hand-authored stroke vectors, whose proportions differ from the installed
+   font glyph being drawn and scored, so mixing it in pulled accurate drawings
+   down. It is still computed, purely to name the stroke that needs another
+   look in the feedback text. */
+function scoreDrawing(canvas, charText) {
+  const user = drawMaskFromCanvas(canvas);
+  const userN = drawNormalise(user.mask, user.w, user.h, DRAW_GRID);
+  if (userN.empty) return { score: 0, empty: true, weakStroke: -1 };
+
+  const refMask = drawReferenceMask(charText, 256);
+  const refN = drawNormalise(refMask, 256, 256, DRAW_GRID);
+  const shape = drawDice(refN.grid, userN.grid, DRAW_GRID);
+  const cov = drawStrokeCoverage(strokeVectorsFor(charText), userN.grid, userN.map, DRAW_GRID);
+
+  const score = Math.max(0, Math.min(100, Math.round(100 * shape)));
+  return {
+    score,
+    empty: false,
+    weakStroke: cov && cov.weakValue < 0.6 ? cov.weakStroke : -1
+  };
+}
+
+const DRAW_PRAISE = [
+  [92, 'Spot on! That is the character.'],
+  [80, 'Excellent — that is very close to the original.'],
+  [65, 'Great job. The shape is really coming together.'],
+  [45, 'Good effort. Keep refining the shape.'],
+  [25, 'Getting there — trace it once more, then try again.'],
+  [0, 'Trace the faded outline a couple of times, then try again.']
+];
+
+function drawPraise(score) {
+  for (const [min, text] of DRAW_PRAISE) if (score >= min) return text;
+  return DRAW_PRAISE[DRAW_PRAISE.length - 1][1];
+}
+
+const DRAW_ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+function drawStrokeHint(idx) {
+  if (idx < 0 || idx >= DRAW_ORDINALS.length) return '';
+  return ' Your ' + DRAW_ORDINALS[idx] + ' stroke needs another look.';
+}
+
+/* ---------- the picker ---------- */
+function renderDrawTest() {
+  const root = h();
+  root.innerHTML = '';
+  if (state.drawSession) return renderDrawRound();
+
+  const script = state.chartScript || 'hiragana';
+  const pool = orderedScriptChars(script);
+  if (!pool.length) {
+    root.append(el('h1', '', 'Draw test'));
+    root.append(el('p', 'sub', 'No characters available for this script.'));
+    return;
+  }
+
+  root.append(el('h1', '', 'Draw test'));
+  root.append(el('p', 'sub', `Write each ${KANA[script]?.name || script} character and see how close you are.`));
+
+  const card = el('div', 'card');
+  card.append(el('h2', '', `${KANA[script]?.name || script} · ${pool.length} characters`));
+  const start = el('button', 'btn primary', 'Start draw test');
+  start.style.width = '100%';
+  start.addEventListener('click', () => startDrawTest(script));
+  card.append(start);
+  root.append(card);
+
+  /* --- stages --- */
+  const stageCard = el('div', 'card');
+  stageCard.append(el('h2', '', 'Select stage'));
+  stageCard.append(el('p', 'muted tiny', 'Ten characters per round, in order — the next round carries on where this one stopped.'));
+  const countLine = el('div', 'row');
+  const selCount = el('span', 'muted', state.draw.stages.length + ' selected');
+  const all = el('button', 'btn small', 'All');
+  const none = el('button', 'btn small', 'None');
+  const spacer = el('span', 'spacer');
+  countLine.append(selCount, spacer, all, none);
+  all.addEventListener('click', () => { state.draw.stages = STAGES.map(s => s.id); state.draw.chunkStart = 0; saveDraw(); renderDrawTest(); });
+  none.addEventListener('click', () => { state.draw.stages = []; state.draw.chunkStart = 0; saveDraw(); renderDrawTest(); });
+  stageCard.append(countLine);
+
+  const chips = el('div', 'row');
+  chips.style.marginTop = '12px';
+  STAGES.forEach(s => {
+    const chip = el('span', 'stage-chip' + (state.draw.stages.includes(s.id) ? ' selected' : ''), s.label);
+    chip.addEventListener('click', () => {
+      const i = state.draw.stages.indexOf(s.id);
+      if (i >= 0) state.draw.stages.splice(i, 1);
+      else state.draw.stages.push(s.id);
+      state.draw.stages.sort((a, b) => a - b);
+      state.draw.chunkStart = 0;
+      saveDraw(); renderDrawTest();
+    });
+    chips.append(chip);
+  });
+  stageCard.append(chips);
+  root.append(stageCard);
+}
+
+function startDrawTest(script) {
+  const pool = orderedScriptChars(script);
+  if (!pool.length) { toast('No characters available'); return; }
+  const size = Math.min(ROUND_SIZE, pool.length);
+
+  /* same chunking as the quiz: 10 at a time through the pool, pointer persists */
+  let start = state.draw.chunkStart || 0;
+  if (start >= pool.length) start = 0;
+  const chars = shuffle(pool.slice(start, start + size));
+  const end = start + chars.length;
+
+  state.drawSession = {
+    chars, index: 0, scores: [], total: chars.length,
+    poolLength: pool.length, chunkStart: start, chunkEnd: end,
+    chunkFinished: end >= pool.length, last: null
+  };
+  pushHistory({ ljDraw: true });   /* so back leaves the round, not the app */
+  renderDrawRound();
+}
+
+function renderDrawRound() {
+  const s = state.drawSession;
+  const root = h();
+  root.innerHTML = '';
+  if (!s) return renderDrawTest();
+
+  const target = s.chars[s.index];
+
+  const top = el('div', 'quiz-top');
+  const quit = el('button', 'btn small', '← Quit');
+  quit.addEventListener('click', () => { state.drawSession = null; renderChart(state.chartScript || 'hiragana'); });
+  const rangeLabel = s.poolLength ? ` · chars ${s.chunkStart + 1}–${s.chunkEnd} of ${s.poolLength}` : '';
+  top.append(quit, el('span', '', `Draw test · ${s.index + 1}/${s.total}${rangeLabel}`));
+  root.append(top);
+
+  const card = el('div', 'card draw-test-card');
+
+  /* the character to copy */
+  const head = el('div', 'draw-test-target');
+  const prompt = el('div', 'prompt-label', 'Write this character');
+  const speak = el('button', 'speak-btn', '🔊 Hear');
+  speak.setAttribute('aria-label', 'Pronounce this character');
+  speak.addEventListener('click', () => speakChar(charToSpeech(target)));
+  head.append(prompt, speak);
+  const glyph = el('div', 'prompt-char' + (target.char.length > 1 ? ' small' : ''), target.char);
+  head.append(glyph, el('div', 'muted tiny', target.script === 'kanji' ? romanize(target.romaji) : target.romaji));
+  card.append(head);
+
+  /* reference character — filled glyph like in the practice popup */
+  const refStage = el('div', 'detail-stage');
+  const refCap = el('div', 'detail-caption', 'Copy this');
+  const ref = document.createElement('canvas');
+  ref.width = ref.height = 260;
+  ref.className = 'write-canvas';
+  refStage.append(refCap, ref);
+  card.append(refStage);
+
+  (() => {
+    const ctx = ref.getContext('2d');
+    const color = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
+    ctx.font = '700 ' + fitGlyphFont(ref.width, target.char, 0.8) + 'px ' + jpFontStackCss();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(target.char, ref.width / 2, ref.height / 2 + ref.height * 0.02);
+  })();
+
+  /* guide (faded trace) + the box the learner draws in */
+  const stage = el('div', 'detail-stage side-anchored');
+  const cap = el('div', 'detail-caption', 'Draw it here');
+  const wrap = el('div', 'draw-wrap');
+  const guide = document.createElement('canvas');
+  guide.width = guide.height = 260;
+  guide.className = 'draw-guide';
+  const draw = document.createElement('canvas');
+  draw.width = draw.height = 260;
+  draw.className = 'draw-canvas';
+  wrap.append(guide, draw);
+  stage.append(cap, wrap);
+  card.append(stage);
+
+  /* faint traceable outline — match the reference glyph exactly (font outline) */
+  (() => {
+    const ctx = guide.getContext('2d');
+    const ink = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
+    ctx.font = '700 ' + fitGlyphFont(guide.width, target.char, 0.8) + 'px ' + jpFontStackCss();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = guide.width * 0.028;
+    ctx.strokeText(target.char, guide.width / 2, guide.height / 2 + guide.height * 0.02);
+  })();
+
+  /* freehand ink, same behaviour as the character popup */
+  const ctx = draw.getContext('2d', { willReadFrequently: true });
+  let penSize = typeof state.settings.penSize === 'number' ? state.settings.penSize : Math.max(3, draw.width * 0.035);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = penSize;
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--primary').trim() || 'currentColor';
+  let inkDown = false;
+  const pos = (e) => {
+    const r = draw.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (draw.width / r.width), y: (e.clientY - r.top) * (draw.height / r.height) };
+  };
+  draw.addEventListener('pointerdown', (e) => {
+    inkDown = true;
+    try { draw.setPointerCapture(e.pointerId); } catch (_) {}
+    const p = pos(e);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+  });
+  draw.addEventListener('pointermove', (e) => {
+    if (!inkDown) return;
+    const p = pos(e);
+    ctx.lineTo(p.x, p.y); ctx.stroke();
+  });
+  const lift = () => { inkDown = false; };
+  draw.addEventListener('pointerup', lift);
+  draw.addEventListener('pointercancel', lift);
+
+  /* controls */
+  const actions = el('div', 'row center detail-actions');
+  const penWrap = el('div', 'pen-size-wrap');
+  const penGroup = el('div', 'pen-size');
+  const shrink = el('button', 'btn pen-btn', '−');
+  const penVal = el('span', 'pen-val', String(Math.round(penSize)));
+  const grow = el('button', 'btn pen-btn', '+');
+  const applyPen = (w) => {
+    const n = Math.max(2, Math.min(40, w));
+    penSize = n; ctx.lineWidth = n; penVal.textContent = String(Math.round(n));
+    state.settings.penSize = n; saveSettings();
+  };
+  shrink.addEventListener('click', () => applyPen(penSize - 2));
+  grow.addEventListener('click', () => applyPen(penSize + 2));
+  penGroup.append(shrink, penVal, grow);
+  penWrap.append(penGroup, el('p', 'muted tiny', 'Pen size'));
+  actions.append(penWrap);
+
+  const clearBtn = el('button', 'btn', 'Clear');
+  clearBtn.addEventListener('click', () => {
+    ctx.clearRect(0, 0, draw.width, draw.height);
+    result.textContent = '';
+    feedback.textContent = '';
+    result.className = 'draw-score';
+  });
+  const traceBtn = el('button', 'btn', 'Trace: on');
+  traceBtn.addEventListener('click', () => {
+    guide.style.display = guide.style.display === 'none' ? '' : 'none';
+    traceBtn.textContent = guide.style.display === 'none' ? 'Trace: off' : 'Trace: on';
+  });
+  const checkBtn = el('button', 'btn primary', 'Check my drawing');
+  actions.append(clearBtn, traceBtn, checkBtn);
+  card.append(actions);
+
+  const result = el('div', 'draw-score');
+  const feedback = el('div', 'draw-feedback');
+  card.append(result, feedback);
+  root.append(card);
+
+  const advance = el('div', 'row center');
+  root.append(advance);
+
+  checkBtn.addEventListener('click', () => {
+    if (s.last) return;                    // already scored this character
+    const res = scoreDrawing(draw, target.char);
+    s.last = res.score;
+    s.scores.push({ char: target.char, script: target.script, score: res.score });
+    checkBtn.disabled = true;
+    clearBtn.disabled = true;
+
+    if (res.empty) {
+      result.textContent = 'Nothing drawn yet';
+      feedback.textContent = 'Draw the character in the box first, then press check.';
+      checkBtn.disabled = false;           // allow retry
+      clearBtn.disabled = false;
+      s.last = null;                       // reset so they can try again
+      s.scores.pop();                      // don't record empty attempt
+      return;
+    } else {
+      result.textContent = res.score + '%';
+      result.className = 'draw-score ' + (res.score >= 70 ? 'good' : res.score >= 40 ? 'mid' : 'low');
+      feedback.textContent = drawPraise(res.score) + drawStrokeHint(res.weakStroke);
+    }
+
+    const nextBtn = el('button', 'btn primary next-pill', s.index + 1 >= s.total ? 'See results' : 'Next character');
+    nextBtn.addEventListener('click', () => {
+      s.index++;
+      s.last = null;
+      if (s.index >= s.total) finishDrawTest();
+      else renderDrawRound();
+    });
+    advance.append(nextBtn);
+    /* no auto-advance here: the learner has to move on deliberately */
+  });
+
+  if (state.settings.speakOnQuestion) setTimeout(() => speakChar(charToSpeech(target)), 200);
+}
+
+function finishDrawTest() {
+  const s = state.drawSession;
+  state.drawSession = null;
+  const root = h();
+  root.innerHTML = '';
+  if (!s) return renderChart(state.chartScript || 'hiragana');
+
+  const done = s.scores.length;
+  const avg = done ? Math.round(s.scores.reduce((n, x) => n + x.score, 0) / done) : 0;
+
+  /* remember the best each character has ever managed, and log the session */
+  for (const sc of s.scores) {
+    const key = sc.script + '|' + sc.char;
+    const st = state.stats.byChar[key] || { answers: 0, correct: 0, wrong: 0, last: null, history: [] };
+    st.drawBest = Math.max(st.drawBest || 0, sc.score);
+    state.stats.byChar[key] = st;
+  }
+  if (!state.stats.drawSessions) state.stats.drawSessions = [];
+  state.stats.drawSessions.push({ date: Date.now(), average: avg, count: done });
+  if (state.stats.drawSessions.length > 50) state.stats.drawSessions = state.stats.drawSessions.slice(-50);
+  saveStats();
+
+  const card = el('div', 'card draw-test-result');
+  card.append(el('h2', '', 'Draw test complete'));
+  card.append(el('div', 'stars', avg >= 90 ? '★★★★★' : avg >= 75 ? '★★★★' : avg >= 60 ? '★★★' : avg >= 40 ? '★★' : '★'));
+  card.append(el('div', 'result-num', avg + '%'));
+  card.append(el('p', 'sub', drawPraise(avg)));
+
+  const list = el('div', 'draw-score-chips');
+  for (const sc of s.scores) {
+    const chip = el('span', 'draw-chip');
+    chip.append(el('span', 'draw-chip-char', sc.char));
+    chip.append(el('span', 'draw-chip-score', sc.score + '%'));
+    list.append(chip);
+  }
+  card.append(list);
+
+  const nextChunk = s.index + 1 >= s.total;
+  if (s.chunkFinished) {
+    card.append(el('p', 'muted tiny', `That was the last round — you covered all ${s.poolLength} characters. The next one starts over at 1.`));
+  } else if (nextChunk) {
+    card.append(el('p', 'muted tiny', `Next round continues at character ${s.chunkEnd + 1}.`));
+  } else {
+    card.append(el('p', 'muted tiny', `Not finished — the next round covers characters ${s.chunkStart + 1}–${s.chunkEnd} again.`));
+  }
+
+  const row = el('div', 'row center');
+  const again = el('button', 'btn primary', nextChunk ? (s.chunkFinished ? 'Start again from 1' : 'Next 10 characters') : 'Practise these 10 again');
+  const back = el('button', 'btn', 'Back to draw test');
+  again.addEventListener('click', () => {
+    /* advance the pointer only when the whole chunk was drawn */
+    if (nextChunk) {
+      if (s.chunkFinished) state.draw.chunkStart = 0;
+      else state.draw.chunkStart = s.chunkEnd;
+      saveDraw();
+    }
+    startDrawTest(s.chars[0]?.script || state.chartScript || 'hiragana');
+  });
+  back.addEventListener('click', () => renderChart(state.chartScript || 'hiragana'));
+  row.append(again, back);
+  card.append(row);
+  root.append(card);
 }
 
 function showDetail(c, script) {
@@ -1481,6 +2031,43 @@ function renderStats() {
   );
   root.append(grid);
 
+  /* --- drawing statistics --- */
+  const drawEntries = entries.filter(([, s]) => s.drawBest != null);
+  if (drawEntries.length || (state.stats.drawSessions && state.stats.drawSessions.length)) {
+    const drawCard = el('div', 'card');
+    drawCard.append(el('h2', '', 'Draw test'));
+    if (drawEntries.length) {
+      const bestAvg = Math.round(drawEntries.reduce((n, [, s]) => n + s.drawBest, 0) / drawEntries.length);
+      const last = state.stats.drawSessions && state.stats.drawSessions.length ? state.stats.drawSessions[state.stats.drawSessions.length - 1] : null;
+      const mk = (num, label) => {
+        const c = el('div', 'stat-card');
+        c.append(el('div', 'stat-num', String(num)));
+        c.append(el('div', 'stat-label', label));
+        return c;
+      };
+      const drawGrid = el('div', 'stat-grid');
+      drawGrid.append(
+        mk(drawEntries.length, 'Characters drawn'),
+        mk(bestAvg + '%', 'Best average'),
+        mk(last ? last.average + '%' : '—', 'Last session'),
+        mk(last ? last.count : '—', 'Last session chars')
+      );
+      drawCard.append(drawGrid);
+    }
+    if (state.stats.drawSessions && state.stats.drawSessions.length) {
+      const list = el('div', 'draw-sessions');
+      state.stats.drawSessions.slice().reverse().slice(0, 10).forEach(s => {
+        const row = el('div', 'draw-session-row');
+        const d = new Date(s.date);
+        const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        row.append(el('span', 'muted tiny', dateStr + ' — ' + s.average + '% · ' + s.count + ' chars'));
+        list.append(row);
+      });
+      drawCard.append(list);
+    }
+    root.append(drawCard);
+  }
+
   const failCard = el('div', 'card');
   failCard.append(el('h2', '', 'Most failed characters'));
   const failed = entries
@@ -1727,6 +2314,213 @@ function boot() {
   backDepth = 0;
   syncBackDepth();
   document.body.classList.remove('booting');
-  setTimeout(() => document.getElementById('boot').remove(), 150);
+  setTimeout(() => {
+    const bootEl = document.getElementById('boot');
+    if (bootEl) bootEl.remove();
+    if (!state.tutorial.seen) {
+      setTimeout(() => renderTutorial(), 50);
+    }
+  }, 150);
 }
 boot();
+
+/* ============================================================
+   TUTORIAL
+   ============================================================ */
+const TUTORIAL_STEPS = [
+  {
+    title: "Welcome to Learning Japanese",
+    content: "A fully offline app to learn Hiragana, Katakana, and Kanji. No account, no internet required after setup.",
+    route: "home",
+    highlight: null
+  },
+  {
+    title: "Home Screen",
+    content: "This is your home base. Choose Automatic to study based on progress, or Manual to pick specific groups.",
+    route: "home",
+    highlight: ".tabs"
+  },
+  {
+    title: "Select Characters",
+    content: "Select which scripts to study. Each panel shows your mastery progress for that script.",
+    route: "home",
+    highlight: ".script-panel"
+  },
+  {
+    title: "Taking the Quiz",
+    content: "Press Start to begin a quiz. Choose the correct answer, listen to pronunciation, and build your mastery.",
+    route: "home",
+    highlight: ".btn.primary"
+  },
+  {
+    title: "Kana & Kanji Chart",
+    content: "Browse the full chart. Tap any character to see its readings, meanings, and practice drawing it.",
+    route: "chart",
+    highlight: ".kana-cell"
+  },
+  {
+    title: "Practice Writing",
+    content: "In the detail view, trace or freehand draw characters, adjust pen size, and replay pronunciation.",
+    route: "chart",
+    highlight: ".detail-popup",
+    openDetail: true
+  },
+  {
+    title: "Track Your Progress",
+    content: "Statistics shows total answers, accuracy, weak characters, and stage-by-stage breakdowns.",
+    route: "stats",
+    highlight: ".stat-grid"
+  },
+  {
+    title: "Customize Your App",
+    content: "Settings lets you change theme, accent colors (including white), fonts, quiz length, direction, and manage your data.",
+    route: "settings",
+    highlight: ".setting-row"
+  },
+  {
+    title: "Immersive Learning Matters",
+    content: "This is immersion-based language learning. To truly learn, listen to Japanese podcasts or watch anime in Japanese without subtitles. You will slowly start to pick up words, pronunciation, and natural patterns over time.",
+    route: "home",
+    highlight: null
+  }
+];
+
+let _tutorialOpen = false;
+let _tutorialStep = 0;
+
+function renderTutorial() {
+  if (_tutorialOpen) return;
+  _tutorialOpen = true;
+  _tutorialStep = 0;
+  
+  const overlay = el('div', 'modal-overlay tutorial-overlay');
+  const modal = el('div', 'modal tutorial-modal');
+  
+  const head = el('div', 'tutorial-head');
+  head.append(el('h2', '', 'Tutorial'));
+  const closeBtn = el('button', 'icon-btn', '�');
+  closeBtn.setAttribute('aria-label', 'Close tutorial');
+  closeBtn.addEventListener('click', closeTutorial);
+  head.append(closeBtn);
+  modal.append(head);
+  
+  const contentWrap = el('div', 'tutorial-body');
+  const contentEl = el('div', 'tutorial-content');
+  const slideTitle = el('h3', 'tutorial-title');
+  const slideText = el('p', 'tutorial-text');
+  contentEl.append(slideTitle, slideText);
+  contentWrap.append(contentEl);
+  modal.append(contentWrap);
+  
+  const dots = el('div', 'tutorial-dots');
+  for (let i = 0; i < TUTORIAL_STEPS.length; i++) {
+    const dot = el('span', 'tutorial-dot' + (i === 0 ? ' active' : ''));
+    dots.append(dot);
+  }
+  modal.append(dots);
+  
+  const nav = el('div', 'tutorial-nav');
+  const skipBtn = el('button', 'btn ghost', 'Skip');
+  const backBtn = el('button', 'btn', 'Back');
+  const nextBtn = el('button', 'btn primary', 'Next');
+  
+  skipBtn.addEventListener('click', closeTutorial);
+  backBtn.addEventListener('click', prevStep);
+  nextBtn.addEventListener('click', nextStep);
+  
+  nav.append(skipBtn, el('span', 'spacer'), backBtn, nextBtn);
+  modal.append(nav);
+  
+  overlay.append(modal);
+  document.body.appendChild(overlay);
+  document.body.classList.add('modal-open');
+  
+  const onKey = (e) => {
+    if (e.key === 'Escape') { closeTutorial(); }
+    if (e.key === 'ArrowRight') { nextStep(); }
+    if (e.key === 'ArrowLeft') { prevStep(); }
+  };
+  document.addEventListener('keydown', onKey);
+  overlay._onKey = onKey;
+  
+  let backdrop = null;
+  let tooltip = null;
+  
+  function cleanupHighlights() {
+    if (backdrop) { backdrop.remove(); backdrop = null; }
+    if (tooltip) { tooltip.remove(); tooltip = null; }
+    document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+  }
+  
+  function highlightStep(step) {
+    cleanupHighlights();
+    if (!step || !step.highlight) return;
+    requestAnimationFrame(() => {
+      const target = document.querySelector(step.highlight);
+      if (target) {
+        backdrop = el('div', 'tutorial-backdrop');
+        document.body.appendChild(backdrop);
+        target.classList.add('tutorial-highlight');
+      }
+    });
+  }
+  
+  function goToStep(step) {
+    const currentRoute = state.route;
+    if (step.route && step.route !== currentRoute) {
+      navigate(step.route, undefined, true);
+    }
+    if (step.openDetail && step.route === 'chart') {
+      requestAnimationFrame(() => {
+        const first = document.querySelector('.kana-cell');
+        if (first) { first.click(); }
+        requestAnimationFrame(() => updateSlide());
+      });
+    } else {
+      requestAnimationFrame(() => updateSlide());
+    }
+  }
+  
+  function updateSlide() {
+    const step = TUTORIAL_STEPS[_tutorialStep];
+    slideTitle.textContent = step.title;
+    slideText.textContent = step.content;
+    backBtn.disabled = _tutorialStep === 0;
+    nextBtn.textContent = _tutorialStep === TUTORIAL_STEPS.length - 1 ? 'Done' : 'Next';
+    [...dots.children].forEach((d, i) => d.classList.toggle('active', i === _tutorialStep));
+    highlightStep(step);
+  }
+  
+  function prevStep() {
+    if (_tutorialStep > 0) {
+      _tutorialStep--;
+      cleanupHighlights();
+      goToStep(TUTORIAL_STEPS[_tutorialStep]);
+    }
+  }
+  
+  function nextStep() {
+    if (_tutorialStep < TUTORIAL_STEPS.length - 1) {
+      _tutorialStep++;
+      cleanupHighlights();
+      goToStep(TUTORIAL_STEPS[_tutorialStep]);
+    } else {
+      closeTutorial();
+    }
+  }
+  
+  function closeTutorial() {
+    state.tutorial.seen = true;
+    saveTutorial();
+    _tutorialOpen = false;
+    cleanupHighlights();
+    if (overlay.parentNode) overlay.remove();
+    if (overlay._onKey) {
+      document.removeEventListener('keydown', overlay._onKey);
+    }
+    document.body.classList.remove('modal-open');
+    navigate('home', undefined, true);
+  }
+  
+  goToStep(TUTORIAL_STEPS[0]);
+}

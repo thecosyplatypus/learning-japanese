@@ -53,7 +53,10 @@ app.whenReady().then(async () => {
       const statsOk = !!document.querySelector('.stat-grid');
       q('settings').click();
       const settingsOk = !!document.querySelector('.accent-dot');
-      return { homeH1, chartOk, kanji, quizOk, statsOk, settingsOk, bootRemoved: !document.getElementById('boot') };
+      q('chart').click();
+      const drawTestTab = [...document.querySelectorAll('.chart-tabs .tab')].find(t => t.textContent.trim() === 'Draw test');
+      const drawTestTabOk = !!drawTestTab;
+      return { homeH1, chartOk, kanji, quizOk, statsOk, settingsOk, drawTestTabOk, bootRemoved: !document.getElementById('boot') };
     })()`);
     console.log('SMOKE RESULT:', JSON.stringify(result));
   } catch (err) {
