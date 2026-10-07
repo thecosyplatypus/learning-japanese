@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Learning Japanese</title>
+<meta name="description" content="Privacy policy for the Learning Japanese offline study app. No data collection, no ads, no accounts.">
+<style>
+  :root {
+    --bg: #f8f7f5; --panel: #fff; --text: #1c1c1e; --muted: #6b7280;
+    --border: #e5e3e0; --primary: #d9534f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121212; --panel: #1e1e1e; --text: #f7f7f7; --muted: #9aa3af; --border: #2c2c2c; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 48px 20px 96px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 4px; letter-spacing: -.01em; }
+  h2 { font-size: 19px; margin: 36px 0 8px; letter-spacing: -.005em; }
+  p, li { color: var(--text); }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 4px; }
+  .updated { color: var(--muted); font-size: 13px; margin: 0 0 28px; }
+  .lede {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin: 0 0 8px;
+  }
+  .lede p { margin: 0; font-size: 16px; }
+  .lede strong { color: var(--primary); }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .9em; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 5px;
+  }
+  .meta { color: var(--muted); font-size: 14px; }
+  a { color: var(--primary); }
+  footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="sub">Learning Japanese &middot; <code>com.nestedorbits.learningjapanese</code></p>
+  <p class="updated">Last updated: 29 September 2026</p>
+
+  <div class="lede">
+    <p>This app does <strong>not</strong> collect, transmit, sell, or share any
+    personal data. It has no internet permission, no analytics, no advertising,
+    and no user accounts. Your study progress never leaves your device.</p>
+  </div>
+
+  <h2>What the app stores, and where</h2>
+  <p>Everything stays in the app's own private storage on your device:</p>
+  <ul>
+    <li><strong>Settings</strong> &mdash; theme, accent colour, font choice, and quiz preferences.</li>
+    <li><strong>Statistics</strong> &mdash; which characters you have been quizzed on, your correct and incorrect counts, and your weak-character list.</li>
+    <li><strong>Quiz progress</strong> &mdash; your position in the current quiz, so you can close the app and pick up where you left off.</li>
+  </ul>
+  <p>This data is written only to the app's own sandboxed storage. The app cannot
+  read it, we cannot read it, and it is not transmitted anywhere. Uninstalling
+  the app deletes it permanently, and there is no account to cancel or delete
+  because no account is ever created.</p>
+
+  <h2>Permissions</h2>
+  <p>The app requests <strong>no Android permissions of its own</strong> &mdash; in
+  particular it does not request internet access, storage access, contacts,
+  location, camera, microphone, or device identifiers, and it asks the user for
+  nothing at runtime. It has nothing to collect. (The app package does contain one
+  internal signature-level permission that the AndroidX libraries generate
+  automatically to keep their own broadcast receivers private. It is not a
+  user-facing permission, is never shown to you, and grants no access to your
+  device or its data.)</p>
+
+  <h2>Network access</h2>
+  <p>The app has no internet permission and makes no network requests. Every
+  character, pronunciation clip, stroke diagram, and dictionary entry is bundled
+  inside the app. It works fully offline, including in aeroplane mode, and it
+  does not phone home, check for updates, or load anything from a server.</p>
+
+  <h2>Children</h2>
+  <p>The app is suitable for learners of any age and is not directed at children.
+  It does not collect data from anyone, including children, and it contains no
+  ads, no purchases, and no links out to third-party services.</p>
+
+  <h2>Third-party components</h2>
+  <p>The app is self-contained. It embeds no advertising, analytics, or crash
+  reporting SDK, and it contacts no third-party server.</p>
+  <p>The bundled character data is derived from <strong>KANJIDIC2</strong>,
+  published by the Electronic Dictionary Research and Development Group
+  (EDRDG), licensed under <strong>CC BY-SA 4.0</strong>.</p>
+
+  <h2>Your rights</h2>
+  <p>Because no data is collected and no data is shared, there is nothing for us
+  to disclose, correct, export, or delete on your behalf. Your data is yours: it
+  lives only on your device, and removing the app removes it.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If a future version of the app changes how data is handled, this page will
+  be updated and the &ldquo;last updated&rdquo; date above will change. Any
+  version that adds network features will be described here before it is
+  released.</p>
+
+  <h2>Contact</h2>
+  <p class="meta">Questions about this policy: <strong>thecosyplatypus@users.noreply.github.com</strong>,
+  or open an issue on the project's GitHub repository.</p>
+
+  <footer>
+    Learning Japanese is an offline study app for hiragana, katakana and kanji.
+  </footer>
+</main>
+</body>
+</html>

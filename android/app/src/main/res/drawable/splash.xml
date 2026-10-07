@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The stock Capacitor splash bitmaps were removed in favour of a flat
+         colour so the native splash and the HTML boot screen look identical. -->
+    <item android:drawable="@color/splashBackground" />
+</layer-list>

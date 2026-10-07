@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the light theme page background in src/styles.css so the
+         launch splash hands off to the app's own HTML boot screen. -->
+    <color name="splashBackground">#f8f7f5</color>
+
+    <!-- Referenced by AppTheme in values/styles.xml -->
+    <color name="colorPrimary">#d9534f</color>
+    <color name="colorPrimaryDark">#c0392b</color>
+    <color name="colorAccent">#d9534f</color>
+</resources>

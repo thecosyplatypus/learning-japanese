@@ -1,0 +1,11 @@
+{
+  "appId": "com.nestedorbits.learningjapanese",
+  "appName": "Learning Japanese",
+  "webDir": "src",
+  "android": {
+    "backgroundColor": "#f8f7f5",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}
