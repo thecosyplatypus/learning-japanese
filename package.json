@@ -12,7 +12,8 @@
     "android:open": "cap open android",
     "android:install": "cap sync android && cd android && gradlew.bat installDebug --no-daemon",
     "android:run": "cap run android",
-    "android:icons": "powershell -ExecutionPolicy Bypass -File .\\make-android-icons.ps1"
+    "android:icons": "powershell -ExecutionPolicy Bypass -File .\\make-android-icons.ps1",
+    "build:win": "electron-builder --win"
   },
   "author": "Nested Orbits (offline rebuild)",
   "license": "MIT",
@@ -20,9 +21,34 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^26.18.0"
   },
   "dependencies": {
     "@capacitor/status-bar": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.nestedorbits.learningjapanese",
+    "productName": "Learning Japanese",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "src/**/*",
+      "icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png"
+    }
   }
 }
