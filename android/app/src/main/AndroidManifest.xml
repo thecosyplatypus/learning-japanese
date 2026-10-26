@@ -42,7 +42,6 @@
 
     <!-- Permissions -->
 
-    <!-- No <uses-permission> entries: the app is fully self-contained. It loads
-         only bundled assets, makes no network requests, and stores nothing
-         outside its own sandbox, so it needs no INTERNET permission. -->
+    <!-- INTERNET + AD_ID permissions declared above. -->
 </manifest>
+
