@@ -1,0 +1,57 @@
+﻿name: Build and sign Windows exe
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build portable exe
+        run: npm run build:win
+
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: dist/*.exe
+
+  sign:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Download unsigned artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: unsigned-exe
+          path: dist
+
+      - name: Sign with SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: learning-japanese
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-exe
+          input-artifact-path: dist/*.exe
+          output-artifact-path: dist/signed
+          wait-for-completion: true
+
+      - name: Upload signed exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-exe
+          path: dist/signed/*.exe
