@@ -7,5 +7,12 @@
     "allowMixedContent": false,
     "captureInput": true,
     "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "AdMob": {
+      "appId": "ca-app-pub-2291450757299783~9540917784",
+      "testingDevices": [],
+      "initializeForTesting": false
+    }
   }
 }

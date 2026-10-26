@@ -3,7 +3,34 @@
 /* ============================================================
    Learning Japanese – renderer app
    All state lives in localStorage; works fully offline.
-   ============================================================ */
+   ============================================================ */ 
+
+/* --- AdMob banner setup (Android) --- */
+function initAdMob() {
+  try {
+    const { AdMob } = window.Capacitor?.Plugins || {};
+    if (!AdMob) return;
+    AdMob.initialize({
+      requestTrackingAuthorization: false,
+      testingDevices: [],
+      initializeForTesting: false
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+function showBannerAd() {
+  try {
+    const { AdMob } = window.Capacitor?.Plugins || {};
+    if (!AdMob) return;
+    AdMob.showBanner({
+      adId: 'ca-app-pub-2291450757299783/6260770449',
+      adSize: 'ADAPTIVE_BANNER',
+      position: 'BOTTOM_CENTER',
+      margin: 0,
+      isTesting: false
+    }).catch(() => {});
+  } catch (e) {}
+}
 
 const { KANA, allCharacters, totalCount } = window.KanaData;
 if (window.KanjiData) KANA.kanji = window.KanjiData.KANA_SCRIPT;   // 'kanji' script, KANA-compatible
@@ -55,7 +82,6 @@ const LS_KEYS = {
   stats: 'kana_stats_v1',
   custom: 'kana_custom_v1',
   quiz: 'kana_quiz_v1',
-  tutorial: 'kana_tutorial_v1',
   draw: 'kana_draw_v1'
 };
 
@@ -72,6 +98,18 @@ const DEFAULT_SETTINGS = {
   penSize: 8           // drawing pen width in px — remembered between sessions
 };
 
+function xpLevel(xp) {
+  const lvl = Math.floor(Math.sqrt((xp || 0) / 50)) + 1;
+  const cur = Math.pow(lvl - 1, 2) * 50;
+  const next = Math.pow(lvl, 2) * 50;
+  return { lvl, xp: xp || 0, cur, next, pct: next > cur ? Math.min(100, Math.round(((xp || 0) - cur) / (next - cur) * 100)) : 100 };
+}
+function addXp(amount) {
+  if (!state.stats.xp) state.stats.xp = 0;
+  state.stats.xp += amount || 0;
+  saveStats();
+}
+
 function orderedScriptChars(script) {
   const out = [];
   for (const g of KANA[script].groups) {
@@ -87,7 +125,7 @@ function buildStages() {
   let id = 1;
   // Hiragana first, then Katakana: 1–10, 11–20, 21–30, … on and on;
   // kanji come last in common-frequency buckets of 100 (1–100, 101–200, …).
-  const sizeOf = { hiragana: 10, katakana: 10, kanji: 100 };
+  const sizeOf = { hiragana: 10, katakana: 10, kanji: 10 };
   const baseOf = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
   for (const script of ['hiragana', 'katakana', 'kanji']) {
     const chars = orderedScriptChars(script);
@@ -108,7 +146,7 @@ const REPEATS = 3;            // times each character is quizzed per test
 
 const state = {
   settings: loadOrDefault(LS_KEYS.settings, DEFAULT_SETTINGS),
-  stats: loadOrDefault(LS_KEYS.stats, { byChar: {}, sessions: [] }),
+  stats: loadOrDefault(LS_KEYS.stats, { byChar: {}, sessions: [], xp: 0 }),
   custom: loadOrDefault(LS_KEYS.custom, []),
   quiz: loadOrDefault(LS_KEYS.quiz, {
     mode: 'auto',
@@ -134,7 +172,7 @@ state.draw = loadOrDefault(LS_KEYS.draw, {
   chunkStart: 0
 });
 
-state.tutorial = loadOrDefault(LS_KEYS.tutorial, { seen: false });
+
 
 if (state.settings.direction === 'both') { state.settings.direction = 'romaji-to-kana'; saveSettings(); }
 
@@ -151,7 +189,7 @@ function saveSettings() { save(LS_KEYS.settings, state.settings); }
 function saveStats() { save(LS_KEYS.stats, state.stats); }
 function saveQuiz() { save(LS_KEYS.quiz, state.quiz); }
 function saveCustom() { save(LS_KEYS.custom, state.custom); }
-function saveTutorial() { save(LS_KEYS.tutorial, state.tutorial); }
+
 function saveDraw() { save(LS_KEYS.draw, state.draw); }
 
 /* ---------------- DOM helpers ---------------- */
@@ -178,8 +216,7 @@ const routes = {
   home: renderHome,
   stats: renderStats,
   chart: renderChart,
-  settings: renderSettings,
-  tutorial: renderTutorial
+  settings: renderSettings
 };
 
 /* ---------- session history (the Android back gesture) ----------
@@ -283,6 +320,16 @@ function applyStylePrefs() {
 document.body.classList.add('booting');
 applyStylePrefs();
 
+/* Initialize ads after boot */
+document.addEventListener('DOMContentLoaded', () => {
+  initAdMob();
+  // Show banner on Android
+  const cap = window.Capacitor;
+  if (cap && cap.isNativePlatform && cap.isNativePlatform()) {
+    setTimeout(() => showBannerAd(), 1000);
+  }
+}, { once: true });
+
 /* ---------------- nav wiring ---------------- */
 const sidebar = document.getElementById('sidebar');
 const NARROW = 720;
@@ -341,151 +388,101 @@ function renderHome() {
   const sub = el('p', 'sub', 'Learning Japanese is a quiz-style learning tool for memorizing kana characters — the two syllabic writing systems used in Japanese: Hiragana and Katakana.');
   root.append(h1, sub);
 
-  /* --- select characters --- */
-  const card = el('div', 'card');
-  const title = el('h2', '', 'Select characters');
-  const desc = el('p', 'muted tiny', 'Automatic chooses characters to study based on your progress. Manual lets you pick specific rows of characters — for example just か き く け こ.');
-  const tabs = el('div', 'tabs');
-  const tAuto = el('button', 'tab' + (state.quiz.mode === 'auto' ? ' active' : ''), 'Automatic');
-  const tManual = el('button', 'tab' + (state.quiz.mode === 'manual' ? ' active' : ''), 'Manual');
-  tAuto.addEventListener('click', () => { state.quiz.mode = 'auto'; saveQuiz(); renderHome(); });
-  tManual.addEventListener('click', () => { state.quiz.mode = 'manual'; saveQuiz(); renderHome(); });
-  tabs.append(tAuto, tManual);
-  card.append(title, desc, tabs);
-  root.append(card);
+  /* character selection removed */
 
-  /* script panels */
-  const selCard = el('div', 'card');
-  selCard.append(el('h2', '', 'Select characters'));
-
-  for (const [script, label] of [['hiragana', 'Hiragana'], ['katakana', 'Katakana'], ['kanji', 'Kanji']]) {
-    const m = masteryFor(script);
-    const panel = el('div', 'script-panel');
-    const jp = el('span', 'jp-name', label === 'Hiragana' ? 'ひらがな' : label === 'Katakana' ? 'カタカナ' : '漢字');
-    const pct = el('span', 'pct', m.pct + '%');
-    const bar = el('div', 'progress');
-    const fill = el('div');
-    fill.style.width = m.pct + '%';
-    bar.append(fill);
-    const disableLabel = el('span', 'muted tiny');
-    panel.append(jp, bar, pct, disableLabel);
-
-    if (state.quiz.mode === 'auto') {
-      // auto mode: just a disable toggle
-      const tog = makeToggle(state.quiz.scripts[script], (on) => { state.quiz.scripts[script] = on; saveQuiz(); updatePanel(disableLabel, tog, m); });
-      disableLabel.append(tog);
-    } else {
-      panel.addEventListener('click', (e) => {
-        if (e.target.closest('.toggle')) return;
-        toggleScriptManual(script);
-      });
-      const scriptOn = state.quiz.groups.includes(script) || state.quiz.rows.some(k => k.startsWith(script + '|'));
-      panel.style.opacity = scriptOn ? '1' : '.5';
-    }
-    selCard.append(panel);
-    function updatePanel(disableLabel, tog, m) {
-      disableLabel.innerHTML = '';
-      disableLabel.append(tog);
-    }
-
-    if (state.quiz.mode === 'manual') {
-      const picker = el('div', 'row-picker');
-      KANA[script].groups.forEach(g => {
-        if (script === 'kanji') {
-          const keys = g.rows.map((_, ri) => script + '|' + g.key + '|' + ri);
-          const on = keys.some(k => state.quiz.rows.includes(k));
-          const chip = el('span', 'stage-chip' + (on ? ' selected' : ''), g.name.replace(/^Common\s*/, ''));
-          chip.title = g.name + ' · ' + g.rows.flat()[0].k + ' … ' + g.rows.flat()[g.rows.flat().length - 1].k;
-          chip.addEventListener('click', () => {
-            const allOn = keys.every(k => state.quiz.rows.includes(k));
-            state.quiz.rows = state.quiz.rows.filter(k => !k.startsWith(script + '|' + g.key + '|'));
-            if (!allOn) state.quiz.rows.push(...keys);
-            saveQuiz(); renderHome();
-          });
-          picker.append(chip);
-          return;
-        }
-        picker.append(el('span', 'group-label', g.name));
-        g.rows.forEach((row, ri) => {
-          const key = script + '|' + g.key + '|' + ri;
-          const chip = el('span', 'stage-chip' + (state.quiz.rows.includes(key) ? ' selected' : ''), rowLabel(row));
-          chip.title = 'Click to ' + (state.quiz.rows.includes(key) ? 'remove' : 'add') + ' · readings: ' + row.map(c => c.r).join(' ');
-          chip.addEventListener('click', () => toggleRow(key));
-          picker.append(chip);
-        });
-      });
-      selCard.append(picker);
-    }
-  }
-
-  /* custom groups */
-  const addCustom = el('button', 'btn ghost small', '+ Add Custom Group');
-  addCustom.addEventListener('click', openCustomGroupModal);
-  selCard.append(addCustom);
-  if (state.custom.length) {
-    state.custom.forEach((grp, i) => {
-      const p = el('div', 'script-panel');
-      const name = el('span', 'jp-name', grp.name);
-      const cnt = el('span', 'muted tiny', grp.chars.length + ' characters');
-      const mana = el('span', 'spacer');
-      const del = el('button', 'btn danger small', 'Remove');
-      del.addEventListener('click', (e) => { e.stopPropagation(); state.custom.splice(i, 1); saveCustom(); saveQuiz(); renderHome(); });
-      p.append(name, cnt, mana, del);
-      if (state.quiz.mode === 'manual') {
-        p.addEventListener('click', () => {
-          const idx = state.quiz.customGroups.indexOf(i);
-          if (idx >= 0) state.quiz.customGroups.splice(idx, 1);
-          else state.quiz.customGroups.push(i);
-          saveQuiz(); renderHome();
-        });
-        p.style.opacity = state.quiz.customGroups.includes(i) ? '1' : '.5';
-      }
-      selCard.append(p);
-    });
-  }
-  root.append(selCard);
 
   /* --- stages --- */
   const stageCard = el('div', 'card');
   stageCard.append(el('h2', '', 'Select stage'));
   stageCard.append(el('p', 'muted tiny', 'Choose which stages are enabled.'));
-  const countLine = el('div', 'row', );
-  const selCount = el('span', 'muted', state.quiz.stages.length + ' selected');
+
+  const testScript = { current: state.chartScript || 'hiragana' };
+  const testScripts = el('div', 'row');
+  testScripts.style.flexWrap = 'wrap';
+  testScripts.style.gap = '8px';
+  const tsHira = el('button', 'btn small' + (testScript.current === 'hiragana' ? ' primary' : ''), 'Hiragana');
+  const tsKata = el('button', 'btn small' + (testScript.current === 'katakana' ? ' primary' : ''), 'Katakana');
+  const tsKanji = el('button', 'btn small' + (testScript.current === 'kanji' ? ' primary' : ''), 'Kanji');
+  tsHira.addEventListener('click', () => { testScript.current = 'hiragana'; state.chartScript = 'hiragana'; tsHira.classList.add('primary'); tsKata.classList.remove('primary'); tsKanji.classList.remove('primary'); renderHome(); });
+  tsKata.addEventListener('click', () => { testScript.current = 'katakana'; state.chartScript = 'katakana'; tsKata.classList.add('primary'); tsHira.classList.remove('primary'); tsKanji.classList.remove('primary'); renderHome(); });
+  tsKanji.addEventListener('click', () => { testScript.current = 'kanji'; state.chartScript = 'kanji'; tsKanji.classList.add('primary'); tsHira.classList.remove('primary'); tsKata.classList.remove('primary'); renderHome(); });
+  testScripts.append(tsHira, tsKata, tsKanji);
+  stageCard.append(testScripts);
+
+  const scriptStages = STAGES.filter(s => s.script === testScript.current);
+  const countLine = el('div', 'row');
+  const selCount = el('span', 'muted', scriptStages.filter(s => state.quiz.stages.includes(s.id) || state.draw.stages.includes(s.id)).length + ' selected');
   const all = el('button', 'btn small', 'All');
   const none = el('button', 'btn small', 'None');
   const spacer = el('span', 'spacer');
   countLine.append(selCount, spacer, all, none);
-  all.addEventListener('click', () => { state.quiz.stages = STAGES.map(s => s.id); state.quiz.chunkStart = 0; saveQuiz(); renderHome(); });
-  none.addEventListener('click', () => { state.quiz.stages = []; state.quiz.chunkStart = 0; saveQuiz(); renderHome(); });
+  all.addEventListener('click', () => { 
+    for (const s of scriptStages) {
+      if (!state.quiz.stages.includes(s.id)) state.quiz.stages.push(s.id);
+      if (!state.draw.stages.includes(s.id)) state.draw.stages.push(s.id);
+    }
+    state.quiz.stages.sort((a, b) => a - b);
+    state.draw.stages.sort((a, b) => a - b);
+    state.quiz.chunkStart = 0; state.draw.chunkStart = 0; saveQuiz(); saveDraw(); renderHome(); 
+  });
+  none.addEventListener('click', () => { 
+    state.quiz.stages = state.quiz.stages.filter(id => !scriptStages.some(s => s.id === id));
+    state.draw.stages = state.draw.stages.filter(id => !scriptStages.some(s => s.id === id));
+    state.quiz.chunkStart = 0; state.draw.chunkStart = 0; saveQuiz(); saveDraw(); renderHome(); 
+  });
   stageCard.append(countLine);
 
   const chips = el('div', 'row', '');
   chips.style.marginTop = '12px';
-  STAGES.forEach(s => {
-    const chip = el('span', 'stage-chip' + (state.quiz.stages.includes(s.id) ? ' selected' : ''), s.label);
+  scriptStages.forEach(s => {
+    const selected = state.quiz.stages.includes(s.id) || state.draw.stages.includes(s.id);
+    const chip = el('span', 'stage-chip' + (selected ? ' selected' : ''), s.label);
     chip.addEventListener('click', () => {
-      const i = state.quiz.stages.indexOf(s.id);
-      if (i >= 0) state.quiz.stages.splice(i, 1);
-      else state.quiz.stages.push(s.id);
+      const inQuiz = state.quiz.stages.indexOf(s.id);
+      const inDraw = state.draw.stages.indexOf(s.id);
+      if (inQuiz >= 0 || inDraw >= 0) {
+        if (inQuiz >= 0) state.quiz.stages.splice(inQuiz, 1);
+        if (inDraw >= 0) state.draw.stages.splice(inDraw, 1);
+      } else {
+        state.quiz.stages.push(s.id);
+        state.draw.stages.push(s.id);
+      }
       state.quiz.stages.sort((a, b) => a - b);
-      state.quiz.chunkStart = 0;   // changing stages restarts from the beginning
-      saveQuiz(); renderHome();
+      state.draw.stages.sort((a, b) => a - b);
+      state.quiz.chunkStart = 0;
+      state.draw.chunkStart = 0;
+      saveQuiz(); saveDraw(); renderHome();
     });
     chips.append(chip);
   });
   stageCard.append(chips);
   root.append(stageCard);
 
-  /* --- start --- */
-  const start = el('button', 'btn primary', 'Start');
-  start.style.width = '100%';
-  start.addEventListener('click', startQuiz);
-  root.append(start);
+  /* --- actions --- */
+  const actions = el('div', 'row');
+  actions.style.gap = '12px';
+  actions.style.marginTop = '16px';
+  const kanaBtn = el('button', 'btn primary', 'Kana Test');
+  kanaBtn.style.flex = '1';
+  kanaBtn.addEventListener('click', startQuiz);
+  const drawBtn = el('button', 'btn primary', 'Drawing Test');
+  drawBtn.style.flex = '1';
+  drawBtn.addEventListener('click', () => { state.chartScript = testScript.current; startDrawTest(testScript.current); });
+  actions.append(kanaBtn, drawBtn);
+  root.append(actions);
 
   const pick = activeCharacterPool();
   if (!pick.length) {
-    start.disabled = true;
-    start.textContent = 'Choose at least one stage or group to continue';
+    kanaBtn.disabled = true;
+    kanaBtn.textContent = 'Choose at least one stage or group to continue';
+  }
+  const dpool = orderedScriptChars(testScript.current);
+  if (!dpool.length) {
+    drawBtn.disabled = true;
+    drawBtn.textContent = 'No characters for selected script';
+  } else if (!(state.draw.stages.length || state.quiz.stages.length)) {
+    drawBtn.disabled = true;
+    drawBtn.textContent = 'Choose at least one stage';
   }
 }
 
@@ -814,11 +811,22 @@ function finishQuiz() {
   root.innerHTML = '';
   const acc = s.total ? Math.round(s.correct / s.total * 100) : 0;
   const done = (s.index + 1) >= s.total;   // answered every question in the chunk
+  if (!state.stats.quizHistory) state.stats.quizHistory = [];
+  const last = state.stats.quizHistory[state.stats.quizHistory.length - 1];
+  let base = Math.max(1, Math.floor(s.correct * 1.5) + Math.floor((s.correct / s.total) * 2));
+  if (last && last.acc >= acc) base = Math.max(1, Math.floor(base * 0.4));
+  else if (last && last.acc === acc) base = Math.max(1, Math.floor(base * 0.6));
+  const gained = base;
+  addXp(gained);
+  const lvl = xpLevel(state.stats.xp);
+  state.stats.quizHistory.push({ date: Date.now(), acc, correct: s.correct, total: s.total });
+  if (state.stats.quizHistory.length > 20) state.stats.quizHistory = state.stats.quizHistory.slice(-20);
   const card = el('div', 'quiz-card');
   const stars = acc >= 90 ? '★★★★★' : acc >= 75 ? '★★★★' : acc >= 60 ? '★★★' : acc >= 40 ? '★★' : '★';
   card.append(el('div', 'stars', stars));
   card.append(el('div', 'result-num', acc + '%'));
   card.append(el('p', 'sub', `You answered ${s.correct} of ${s.total} questions correctly.`));
+  card.append(el('p', 'muted', `+${gained} XP · Level ${lvl.lvl} (${lvl.xp} / ${lvl.next})`));
   if (!done) {
     card.append(el('p', 'muted tiny', `Not finished — next quiz covers characters ${s.chunkStart + 1}–${s.chunkEnd} again.`));
   } else if (s.chunkFinished) {
@@ -855,9 +863,7 @@ function finishQuiz() {
 function renderChart(initialScript) {
   const root = h();
   root.innerHTML = '';
-  /* the drawing test hangs off the chart as a fourth tab: it tests the same
-     characters the chart teaches, so it lives here rather than in the sidebar */
-  if (initialScript === 'drawtest') return renderDrawTest();
+/* drawing test moved to home page */
   const isKanji = initialScript === 'kanji';
   root.append(el('h1', '', isKanji ? 'Kanji chart' : 'Kana chart'));
   root.append(el('p', 'sub', isKanji
@@ -871,9 +877,6 @@ function renderChart(initialScript) {
     t.addEventListener('click', () => renderChart(sc));
     tabs.append(t);
   });
-  const drawTab = el('button', 'tab draw-test-tab', 'Draw test');
-  drawTab.addEventListener('click', () => renderChart('drawtest'));
-  tabs.append(drawTab);
   root.append(tabs);
 
   const active = ['hiragana', 'katakana', 'kanji'].includes(initialScript) ? initialScript : 'hiragana';
@@ -1391,6 +1394,14 @@ function finishDrawTest() {
 
   const done = s.scores.length;
   const avg = done ? Math.round(s.scores.reduce((n, x) => n + x.score, 0) / done) : 0;
+  if (!state.stats.drawHistory) state.stats.drawHistory = [];
+  const last = state.stats.drawHistory[state.stats.drawHistory.length - 1];
+  let base = Math.max(2, Math.floor(avg / 20) + Math.floor(done / 5));
+  if (last && last.avg >= avg) base = Math.max(1, Math.floor(base * 0.3));
+  else if (last && last.avg === avg) base = Math.max(1, Math.floor(base * 0.5));
+  const gained = base;
+  addXp(gained);
+  const lvl = xpLevel(state.stats.xp);
 
   /* remember the best each character has ever managed, and log the session */
   for (const sc of s.scores) {
@@ -1402,6 +1413,8 @@ function finishDrawTest() {
   if (!state.stats.drawSessions) state.stats.drawSessions = [];
   state.stats.drawSessions.push({ date: Date.now(), average: avg, count: done });
   if (state.stats.drawSessions.length > 50) state.stats.drawSessions = state.stats.drawSessions.slice(-50);
+  state.stats.drawHistory.push({ date: Date.now(), avg, count: done });
+  if (state.stats.drawHistory.length > 20) state.stats.drawHistory = state.stats.drawHistory.slice(-20);
   saveStats();
 
   const card = el('div', 'card draw-test-result');
@@ -1409,6 +1422,7 @@ function finishDrawTest() {
   card.append(el('div', 'stars', avg >= 90 ? '★★★★★' : avg >= 75 ? '★★★★' : avg >= 60 ? '★★★' : avg >= 40 ? '★★' : '★'));
   card.append(el('div', 'result-num', avg + '%'));
   card.append(el('p', 'sub', drawPraise(avg)));
+  card.append(el('p', 'muted', `+${gained} XP · Level ${lvl.lvl} (${lvl.xp} / ${lvl.next})`));
 
   const list = el('div', 'draw-score-chips');
   for (const sc of s.scores) {
@@ -2015,6 +2029,7 @@ function renderStats() {
   const { byChar, sessions } = state.stats;
   const entries = Object.entries(byChar);
   const tally = entries.reduce((a, [k, s]) => ({ a: a.a + s.answers, c: a.c + s.correct, w: a.w + s.wrong }), { a: 0, c: 0, w: 0 });
+  const lvl = xpLevel(state.stats.xp);
 
   const grid = el('div', 'stat-grid');
   const mk = (num, label) => {
@@ -2024,12 +2039,24 @@ function renderStats() {
     return c;
   };
   grid.append(
+    mk('Level ' + lvl.lvl, 'Progress'),
     mk(tally.a || '—', 'Total answers'),
     mk(tally.a ? Math.round(tally.c / tally.a * 100) + '%' : '—', 'Accuracy'),
-    mk(sessions.length, 'Sessions'),
-    mk(sessions.length ? Math.round(sessions.reduce((n, s) => n + s.correct, 0) / Math.max(1, sessions.reduce((n, s) => n + s.total, 0)) * 100) + '%' : '—', 'Correct / asked')
+    mk(sessions.length, 'Sessions')
   );
   root.append(grid);
+
+  const xpCard = el('div', 'card');
+  xpCard.append(el('h2', '', 'XP'));
+  const xpRow = el('div', 'row');
+  xpRow.append(el('span', 'muted', `${lvl.xp} / ${lvl.next} XP`));
+  xpCard.append(xpRow);
+  const xpBar = el('div', 'progress');
+  const xpFill = el('div');
+  xpFill.style.width = lvl.pct + '%';
+  xpBar.append(xpFill);
+  xpCard.append(xpBar);
+  root.append(xpCard);
 
   /* --- drawing statistics --- */
   const drawEntries = entries.filter(([, s]) => s.drawBest != null);
@@ -2154,7 +2181,8 @@ function renderStats() {
   const reset = el('button', 'btn danger', 'Reset all statistics');
   reset.addEventListener('click', () => {
     if (confirm('Reset all statistics? This cannot be undone.')) {
-      state.stats = { byChar: {}, sessions: [] };
+      state.stats = { byChar: {}, sessions: [], xp: 0 };
+      if (state.stats.drawSessions) delete state.stats.drawSessions;
       saveStats(); renderStats(); toast('Statistics cleared');
     }
   });
@@ -2336,15 +2364,9 @@ const TUTORIAL_STEPS = [
   },
   {
     title: "Home Screen",
-    content: "This is your home base. Choose Automatic to study based on progress, or Manual to pick specific groups.",
+    content: "This is your home base. Select stages and choose Kana Test or Drawing Test.",
     route: "home",
-    highlight: ".tabs"
-  },
-  {
-    title: "Select Characters",
-    content: "Select which scripts to study. Each panel shows your mastery progress for that script.",
-    route: "home",
-    highlight: ".script-panel"
+    highlight: ".stage-chip"
   },
   {
     title: "Taking the Quiz",

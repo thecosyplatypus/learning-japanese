@@ -25,6 +25,7 @@
     "electron-builder": "^26.18.0"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.2.1",
     "@capacitor/status-bar": "^8.0.3"
   },
   "build": {
