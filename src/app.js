@@ -34,7 +34,7 @@ function showBannerAd() {
 
 /* --- Interstitial (full-screen) ad shown after each quiz --- */
 // Replace with your own AdMob interstitial ad unit ID once created in the AdMob console.
-const INTERSTITIAL_AD_ID = 'ca-app-pub-3940256099942544/1033173712'; // Google test interstitial
+const INTERSTITIAL_AD_ID = 'ca-app-pub-2291450757299783/9498119944';
 function isNativePlatform() {
   const cap = window.Capacitor;
   return !!(cap && cap.isNativePlatform && cap.isNativePlatform());
