@@ -32,6 +32,23 @@ function showBannerAd() {
   } catch (e) {}
 }
 
+/* --- Interstitial (full-screen) ad shown after each quiz --- */
+// Replace with your own AdMob interstitial ad unit ID once created in the AdMob console.
+const INTERSTITIAL_AD_ID = 'ca-app-pub-3940256099942544/1033173712'; // Google test interstitial
+function isNativePlatform() {
+  const cap = window.Capacitor;
+  return !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+}
+async function showInterstitialAd() {
+  if (!isNativePlatform()) return;
+  const { AdMob } = window.Capacitor?.Plugins || {};
+  if (!AdMob) return;
+  try {
+    await AdMob.prepareInterstitial({ adId: INTERSTITIAL_AD_ID });
+    await AdMob.showInterstitial();
+  } catch (e) {}
+}
+
 const { KANA, allCharacters, totalCount } = window.KanaData;
 if (window.KanjiData) KANA.kanji = window.KanjiData.KANA_SCRIPT;   // 'kanji' script, KANA-compatible
 
@@ -844,6 +861,9 @@ function finishQuiz() {
 
   again.addEventListener('click', () => startQuiz());
   home.addEventListener('click', () => { state.quizSession = null; goBack(); });
+
+  // Show a full-screen interstitial ad after every quiz (Android only).
+  setTimeout(() => showInterstitialAd(), 300);
 
   // advance the persistent pointer only when the whole chunk was answered:
   // next quiz takes the following 10 in order
