@@ -99,6 +99,20 @@ main() {
   say "Using Node.js $(node -v)"
   say "Installing Electron (one-time download)..."
   npm install --no-audit --no-fund
+
+  # Newer npm (v11.16+) gates install scripts behind an allow-list; even with the
+  # allowScripts entries above, a blocked/missed postinstall can leave the Electron
+  # binary absent. Fall back to running Electron's installer directly.
+  if [ ! -x "node_modules/electron/dist/electron" ] && [ ! -f "node_modules/electron/dist/electron.exe" ]; then
+    if [ -f "node_modules/electron/install.js" ]; then
+      say "Electron binary missing - running its installer directly..."
+      node node_modules/electron/install.js
+    fi
+  fi
+  if [ ! -f "node_modules/electron/dist/electron.exe" ] && [ ! -x "node_modules/electron/dist/electron" ]; then
+    say "Electron is still missing after setup. Run setup.sh manually for details."
+    exit 1
+  fi
   say "Setup complete."
 }
 

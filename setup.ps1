@@ -53,4 +53,19 @@ Write-Host ("Using Node.js " + (& node -v))
 Write-Host 'Installing Electron (one-time download)...' -ForegroundColor Cyan
 & npm.cmd install
 if ($LASTEXITCODE -ne 0) { throw 'npm install failed. Check your internet connection and try again.' }
+
+# Newer npm (v11.16+) gates install scripts behind an allow-list; even with the
+# allowScripts entries above, a blocked/missed postinstall can leave the Electron
+# binary absent. Fall back to running Electron's installer directly so the
+# binary is guaranteed to be present after setup.
+$electronExe = Join-Path $here 'node_modules\electron\dist\electron.exe'
+if (-not (Test-Path $electronExe)) {
+  $electronInstall = Join-Path $here 'node_modules\electron\install.js'
+  if (Test-Path $electronInstall) {
+    Write-Host 'Electron binary missing - running its installer directly...' -ForegroundColor Cyan
+    & node $electronInstall
+    if ($LASTEXITCODE -ne 0) { throw 'Electron binary download failed. Check your internet connection and try again.' }
+  }
+}
+if (-not (Test-Path $electronExe)) { throw 'Electron is still missing after setup. Run setup.ps1 manually for details.' }
 Write-Host 'Setup complete.' -ForegroundColor Green

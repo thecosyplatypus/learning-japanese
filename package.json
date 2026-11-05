@@ -17,6 +17,10 @@
   },
   "author": "Nested Orbits (offline rebuild)",
   "license": "MIT",
+  "allowScripts": {
+    "electron": true,
+    "electron-winstaller": true
+  },
   "devDependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
