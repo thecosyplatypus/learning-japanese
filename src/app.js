@@ -1513,9 +1513,20 @@ function showDetail(c, script) {
   /* reference box — the character, shown like on the chart */
   const refStage = el('div', 'detail-stage');
   const refCap = el('div', 'detail-caption', 'Copy this');
-  const ref = el('canvas');
-  ref.width = 260; ref.height = 260;
-  ref.className = 'write-canvas';
+  const gifPath = (script === 'hiragana' && window.HIRAGANA_GIFS && window.HIRAGANA_GIFS[c.k]) ? window.HIRAGANA_GIFS[c.k] : null;
+  let ref;
+  if (gifPath) {
+    ref = el('img');
+    ref.src = gifPath;
+    ref.alt = c.k + ' stroke order';
+    ref.width = 260; ref.height = 260;
+    ref.className = 'write-canvas';
+    ref.style.objectFit = 'contain';
+  } else {
+    ref = el('canvas');
+    ref.width = 260; ref.height = 260;
+    ref.className = 'write-canvas';
+  }
   refStage.append(refCap, ref);
   pop.append(refStage);
 
@@ -1547,15 +1558,17 @@ function showDetail(c, script) {
   drawStage.append(drawCap, chev('prev'), drawWrap, chev('next'));
   pop.append(drawStage);
 
-  /* render the static reference glyph once */
-  (() => {
-    const ctx = ref.getContext('2d');
-    const color = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
-    ctx.font = '700 ' + fitGlyphFont(ref.width, c.k, 0.8) + 'px ' + jpFontStackCss();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = color;
-    ctx.fillText(c.k, ref.width / 2, ref.height / 2 + ref.height * 0.02);
-  })();
+  /* render the static reference glyph once (only when no animated GIF is shown) */
+  if (ref.tagName === 'CANVAS') {
+    (() => {
+      const ctx = ref.getContext('2d');
+      const color = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
+      ctx.font = '700 ' + fitGlyphFont(ref.width, c.k, 0.8) + 'px ' + jpFontStackCss();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.fillText(c.k, ref.width / 2, ref.height / 2 + ref.height * 0.02);
+    })();
+  }
 
   /* faint traceable outline on the drawing box — toggle it with the Trace button */
   (() => {
