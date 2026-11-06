@@ -1515,8 +1515,9 @@ function showDetail(c, script) {
   const refCap = el('div', 'detail-caption', 'Copy this');
   const gifMaps = { hiragana: window.HIRAGANA_GIFS, katakana: window.KATAKANA_GIFS, kanji: window.KANJI_GIFS };
   const gifMap = gifMaps[script];
-  const lookup = [...c.k][0];
-  const gifPath = (gifMap && gifMap[lookup]) ? gifMap[lookup] : null;
+  // Prefer a GIF for the whole character (yōon/extended combos have their own
+  // combined animation); fall back to the base character for anything else.
+  const gifPath = gifMap ? (gifMap[c.k] || gifMap[[...c.k][0]] || null) : null;
   if (gifPath) {
     const ref = el('img');
     ref.src = gifPath;
@@ -2248,7 +2249,7 @@ function renderSettings() {
   })));
 
   const accentWrap = el('div', 'accent-list');
-  const accents = { red: '#d9534f', white: '#ffffff', green: '#2b8a5a', amber: '#d68b1f', blue: '#5b6ad9' };
+  const accents = { red: '#d9534f', white: '#ffffff', green: '#2b8a5a', amber: '#d68b1f', blue: '#5b6ad9', purple: '#8b5cf6' };
   for (const [key, color] of Object.entries(accents)) {
     const d = el('span', 'accent-dot' + (state.settings.accent === key ? ' active' : ''));
     d.style.background = color;
