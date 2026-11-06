@@ -901,7 +901,7 @@ function renderChart(initialScript) {
 
   const active = ['hiragana', 'katakana', 'kanji'].includes(initialScript) ? initialScript : 'hiragana';
   state.chartScript = active;
-  for (const g of KANA[active].groups) {
+  for (const g of KANA[active].groups.filter(g => !(active === 'katakana' && (g.key === 'yoon' || g.key === 'extended')))) {
     const group = el('div', 'chart-group');
     group.append(el('h3', '', g.name));
     for (const row of g.rows) {
@@ -1513,21 +1513,32 @@ function showDetail(c, script) {
   /* reference box — the character, shown like on the chart */
   const refStage = el('div', 'detail-stage');
   const refCap = el('div', 'detail-caption', 'Copy this');
-  const gifPath = (script === 'hiragana' && window.HIRAGANA_GIFS && window.HIRAGANA_GIFS[c.k]) ? window.HIRAGANA_GIFS[c.k] : null;
-  let ref;
+  const gifMaps = { hiragana: window.HIRAGANA_GIFS, katakana: window.KATAKANA_GIFS, kanji: window.KANJI_GIFS };
+  const gifMap = gifMaps[script];
+  const lookup = [...c.k][0];
+  const gifPath = (gifMap && gifMap[lookup]) ? gifMap[lookup] : null;
   if (gifPath) {
-    ref = el('img');
+    const ref = el('img');
     ref.src = gifPath;
     ref.alt = c.k + ' stroke order';
     ref.width = 260; ref.height = 260;
     ref.className = 'write-canvas';
     ref.style.objectFit = 'contain';
+    refStage.append(refCap, ref);
   } else {
-    ref = el('canvas');
+    const ref = el('canvas');
     ref.width = 260; ref.height = 260;
     ref.className = 'write-canvas';
+    refStage.append(refCap, ref);
+    (() => {
+      const ctx = ref.getContext('2d');
+      const color = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
+      ctx.font = '700 ' + fitGlyphFont(ref.width, c.k, 0.8) + 'px ' + jpFontStackCss();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.fillText(c.k, ref.width / 2, ref.height / 2 + ref.height * 0.02);
+    })();
   }
-  refStage.append(refCap, ref);
   pop.append(refStage);
 
   /* drawing box — character drawn here */
@@ -1558,17 +1569,6 @@ function showDetail(c, script) {
   drawStage.append(drawCap, chev('prev'), drawWrap, chev('next'));
   pop.append(drawStage);
 
-  /* render the static reference glyph once (only when no animated GIF is shown) */
-  if (ref.tagName === 'CANVAS') {
-    (() => {
-      const ctx = ref.getContext('2d');
-      const color = getComputedStyle(document.body).getPropertyValue('--text').trim() || '#222';
-      ctx.font = '700 ' + fitGlyphFont(ref.width, c.k, 0.8) + 'px ' + jpFontStackCss();
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = color;
-      ctx.fillText(c.k, ref.width / 2, ref.height / 2 + ref.height * 0.02);
-    })();
-  }
 
   /* faint traceable outline on the drawing box — toggle it with the Trace button */
   (() => {
