@@ -1524,7 +1524,10 @@ function showDetail(c, script) {
     ref.alt = c.k + ' stroke order';
     ref.width = 260; ref.height = 260;
     ref.className = 'write-canvas';
+    ref.decoding = 'async';
+    ref.loading = 'eager';
     ref.style.objectFit = 'contain';
+    ref.style.imageRendering = 'auto';
     refStage.append(refCap, ref);
   } else {
     const ref = el('canvas');
