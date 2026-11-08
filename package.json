@@ -60,6 +60,16 @@
         }
       ],
       "icon": "icon.png"
+    },
+    "cscLink": "certs/learning-japanese.pfx",
+    "cscKeyPassword": "LearningJapanese2026",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Learning Japanese",
+      "runAfterFinish": true
     }
   }
 }
