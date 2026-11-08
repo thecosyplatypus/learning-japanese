@@ -2580,3 +2580,7 @@ function renderTutorial() {
   
   goToStep(TUTORIAL_STEPS[0]);
 }
+
+/* --- Ko-fi support button (Windows/Electron only) --- */
+(function(){ if (navigator.userAgent.includes('Electron')) { var f = document.querySelector('.kofi-fab'); if (f) f.classList.add('is-visible'); } })();
+

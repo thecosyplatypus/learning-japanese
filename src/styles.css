@@ -658,3 +658,62 @@ html[data-accent="white"] .brand-mark { background: #ffffff; color: #000000; }
   transform: translateX(-50%);
   text-align: center;
 }
+
+/* ---------- cute Ko-fi support button ---------- */
+.kofi-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 999;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 10px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff5e8a 0%, #ff8fab 50%, #ffb3c6 100%);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 8px 22px rgba(255, 94, 138, 0.45), 0 2px 6px rgba(0,0,0,0.12);
+  transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), box-shadow 0.25s ease;
+  animation: kofi-bob 2.6s ease-in-out infinite;
+  user-select: none;
+}
+.kofi-fab.is-visible { display: inline-flex; }
+
+.kofi-fab:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 12px 28px rgba(255, 94, 138, 0.55), 0 4px 10px rgba(0,0,0,0.15);
+}
+.kofi-fab:active { transform: translateY(-1px) scale(0.98); }
+.kofi-fab-cup {
+  font-size: 20px;
+  line-height: 1;
+  display: inline-block;
+  animation: kofi-wiggle 1.8s ease-in-out infinite;
+}
+.kofi-fab-label { white-space: nowrap; }
+.kofi-fab-heart {
+  font-size: 14px;
+  line-height: 1;
+  animation: kofi-pulse 1.4s ease-in-out infinite;
+}
+@keyframes kofi-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes kofi-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-12deg); }
+  75% { transform: rotate(12deg); }
+}
+@keyframes kofi-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+}
+@media (max-width: 600px) {
+  .kofi-fab-label { display: none; }
+  .kofi-fab { padding: 12px; }
+}
