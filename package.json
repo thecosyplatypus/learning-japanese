@@ -66,10 +66,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": "always",
+      "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Learning Japanese",
-      "runAfterFinish": true
+      "shortcutName": "Learning Japanese"
     }
   }
 }
